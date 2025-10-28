@@ -4,7 +4,7 @@ AI-powered consulting platform for maturity assessments and use case grooming.
 
 **Status:** ✅ Wave 1 Complete - Deployed to Production
 
-**Live Service:** https://ai-agency-847424242737.europe-west1.run.app
+**Live Service:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
 
 ## Features
 
@@ -61,21 +61,26 @@ The platform is deployed and running on Google Cloud Run:
 
 ```bash
 # API Documentation (Swagger UI)
-https://ai-agency-847424242737.europe-west1.run.app/docs
-
-# Health Check
-https://ai-agency-847424242737.europe-west1.run.app/healthz
+https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
 
 # OpenAPI Schema
-https://ai-agency-847424242737.europe-west1.run.app/openapi.json
+https://ai-agency-4ebxrg4hdq-ew.a.run.app/openapi.json
+
+# API Endpoints
+https://ai-agency-4ebxrg4hdq-ew.a.run.app/runs
 ```
 
 **Infrastructure Details:**
 - **Region:** europe-west1 (Belgium)
 - **Platform:** Google Cloud Run
+- **Service URL:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
 - **Database:** Cloud SQL PostgreSQL 15 (ai-agency-db)
 - **Storage:** GCS bucket (merlin-ai-agency-artifacts-eu)
 - **Auto-deployment:** Enabled via GitHub Actions on push to main
+
+**Known Issues:**
+- The `/healthz` endpoint returns 404 (Cloud Run routing issue) but `/docs` works correctly
+- Workaround: Use `/docs` endpoint to verify service health
 
 ### 3. Run Tests
 
@@ -126,7 +131,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for comprehensive technical arc
 
 **Full API documentation:**
 - Local: http://localhost:8080/docs
-- Production: https://ai-agency-847424242737.europe-west1.run.app/docs
+- Production: https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
 
 ## Project Structure
 
@@ -205,6 +210,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed multi-cloud setup.
 - **[CODE_REVIEW_CHECKLIST.md](docs/CODE_REVIEW_CHECKLIST.md)** - Code review guidelines
 - **[SECURITY_AUDIT_REPORT.md](docs/SECURITY_AUDIT_REPORT.md)** - Security audit findings
 - **[WAVE1_REVIEW.md](docs/WAVE1_REVIEW.md)** - Wave 1 implementation review
+- **[WAVE1_DEPLOYMENT_NOTES.md](docs/WAVE1_DEPLOYMENT_NOTES.md)** - Wave 1 deployment details and known issues
 
 ## Environment Variables
 
@@ -248,13 +254,13 @@ Auto-deploys on push to main:
 - ✅ Pushes to Artifact Registry (europe-west1)
 - ✅ Deploys to Cloud Run (europe-west1)
 - ✅ Runs post-deployment smoke tests
-- ✅ Service: https://ai-agency-847424242737.europe-west1.run.app
+- ✅ Service: https://ai-agency-4ebxrg4hdq-ew.a.run.app
 
 ### E2E Testing Workflow (`.github/workflows/e2e-tests.yml`)
 Runs after successful deployment:
 - ✅ Smoke tests on deployed service
 - ✅ Full E2E test suite
-- ✅ Health check validation
+- ✅ Service availability validation
 
 ## Contributing
 

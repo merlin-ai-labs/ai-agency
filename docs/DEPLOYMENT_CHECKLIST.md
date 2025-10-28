@@ -55,7 +55,7 @@ Required APIs:
 **Service details:**
 - Name: `ai-agency`
 - Region: `europe-west1`
-- URL: https://ai-agency-847424242737.europe-west1.run.app
+- URL: https://ai-agency-4ebxrg4hdq-ew.a.run.app
 
 **Verify service exists:**
 ```bash

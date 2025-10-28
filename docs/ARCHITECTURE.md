@@ -1,8 +1,10 @@
 # AI Consulting Agency - Technical Architecture
 
-**Version:** 0.1.0
+**Version:** 0.2.1
 **Last Updated:** 2025-10-28
-**Status:** Wave 1 Complete - Foundation Ready
+**Status:** Wave 1 Complete - Deployed to Production
+
+**Production URL:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
 
 ---
 
@@ -829,11 +831,14 @@ logger.info(
 
 ### Health Checks
 ```
-GET /health
-- Database connectivity
-- LLM provider availability
-- Storage service status
+GET /healthz (Wave 1 - stub implementation)
+- Returns: {"status": "ok", "service": "ai-agency"}
+- Note: Currently returns 404 on Cloud Run (routing issue being investigated)
+- Workaround: Use GET /docs to verify service availability
 ```
+
+**Wave 1 Known Issue:**
+The `/healthz` endpoint is defined in code but returns 404 when deployed to Cloud Run. The `/docs` endpoint works correctly and can be used for health checks until this is resolved in Wave 2.
 
 ---
 

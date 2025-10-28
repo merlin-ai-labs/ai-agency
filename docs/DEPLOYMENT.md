@@ -140,7 +140,7 @@ export DATABASE_URL="your-connection-string"
 
 5. **Access the application**
    - API: http://localhost:8080
-   - Health check: http://localhost:8080/health
+   - Health check: http://localhost:8080/healthz
    - API docs: http://localhost:8080/docs
 
 ### Manual Setup (if needed)
@@ -829,6 +829,68 @@ WITH (lists = 100);
 -- Analyze table
 ANALYZE document_chunks;
 ```
+
+---
+
+## Production Deployment Status
+
+### Current Production Environment
+
+**Service URL**: https://ai-agency-4ebxrg4hdq-ew.a.run.app
+
+**Available Endpoints:**
+- Swagger UI: https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
+- OpenAPI Schema: https://ai-agency-4ebxrg4hdq-ew.a.run.app/openapi.json
+- Create Run: POST https://ai-agency-4ebxrg4hdq-ew.a.run.app/runs
+- Get Run: GET https://ai-agency-4ebxrg4hdq-ew.a.run.app/runs/{run_id}
+
+**Infrastructure:**
+- Platform: Google Cloud Run
+- Region: europe-west1 (Belgium)
+- Database: Cloud SQL PostgreSQL 15 (ai-agency-db)
+- Storage: GCS (merlin-ai-agency-artifacts-eu)
+- Secrets: Secret Manager
+- Service Account: ai-agency-runner@merlin-notebook-lm.iam.gserviceaccount.com
+
+**Deployment Method:**
+- Automatic deployment via GitHub Actions on push to main branch
+- Docker image: europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest
+
+### Known Issues
+
+#### /healthz Endpoint Returns 404
+
+**Issue**: The `/healthz` endpoint returns a 404 error from Cloud Run, even though:
+- The endpoint is defined in `app/main.py`
+- It appears in the OpenAPI specification at `/openapi.json`
+- Other endpoints like `/docs` work correctly
+
+**Symptoms:**
+```bash
+$ curl https://ai-agency-4ebxrg4hdq-ew.a.run.app/healthz
+# Returns Google's 404 error page, not FastAPI 404
+```
+
+**Investigation Notes:**
+- Cloud Run is returning Google's generic 404 page, not the application's 404
+- This suggests the request is not reaching the FastAPI application
+- Possible causes:
+  - Cloud Run health check configuration issue
+  - Routing or path matching problem
+  - ASGI/Uvicorn configuration issue
+
+**Workaround:**
+Use `/docs` endpoint for service availability checks:
+```bash
+# Check if service is up
+curl -s -o /dev/null -w "%{http_code}" \
+  https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
+# Returns: 200
+```
+
+**Impact**: Low - Monitoring and health checks can use alternative endpoints
+
+**Status**: To be investigated in Wave 2
 
 ---
 

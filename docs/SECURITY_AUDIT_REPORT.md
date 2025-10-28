@@ -2,7 +2,7 @@
 **Date:** 2025-10-28
 **Auditor:** security-engineer agent
 **Scope:** Production deployment to Cloud Run (europe-west1)
-**Service URL:** https://ai-agency-847424242737.europe-west1.run.app
+**Service URL:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
 
 ---
 
@@ -86,10 +86,10 @@ The deployed AI Agency platform demonstrates strong security practices with prop
 
 **Evidence:**
 ```bash
-$ curl https://ai-agency-847424242737.europe-west1.run.app/healthz
+$ curl https://ai-agency-4ebxrg4hdq-ew.a.run.app/healthz
 404 Not Found (Google's 404 page)
 
-$ curl https://ai-agency-847424242737.europe-west1.run.app/docs
+$ curl https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
 200 OK (Swagger UI loads correctly)
 ```
 

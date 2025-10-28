@@ -13,6 +13,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced **qa-engineer** agent with E2E testing for deployed Cloud Run services
 - Added AGENT_WORKFLOW.md comprehensive workflow guide
 
+## [0.2.1] - 2025-10-28
+
+### Wave 1 Deployment Complete
+
+#### Deployed
+- **Production URL**: https://ai-agency-4ebxrg4hdq-ew.a.run.app
+- **Region**: europe-west1 (Belgium)
+- **Status**: Live and operational
+
+#### Features Available
+- FastAPI application with Swagger UI at `/docs`
+- OpenAPI schema at `/openapi.json`
+- Stub endpoints for `/runs` (POST and GET)
+- Auto-deployment via GitHub Actions
+
+#### Known Issues
+- `/healthz` endpoint returns 404 (Cloud Run routing issue)
+  - Investigation: Endpoint defined in code and shows in OpenAPI spec
+  - Symptom: Cloud Run returns Google 404 page instead of reaching app
+  - Workaround: Use `/docs` endpoint to verify service availability
+  - Impact: Low (monitoring can use `/docs` or `/openapi.json` instead)
+  - Status: To be investigated in Wave 2
+
+#### Infrastructure
+- Cloud Run service deployed successfully
+- Cloud SQL PostgreSQL 15 instance running (ai-agency-db)
+- GCS bucket configured (merlin-ai-agency-artifacts-eu)
+- Secrets Manager storing credentials
+- Service account: ai-agency-runner@merlin-notebook-lm.iam.gserviceaccount.com
+
+#### Documentation Updates
+- Updated all URLs to production deployment
+- Documented /healthz routing issue
+- Added Known Issues section to README.md
+- Updated deployment information across all docs
+
 ## [0.2.0] - 2025-10-28
 
 ### Infrastructure Migration
@@ -31,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Service Account**: ai-agency-runner@merlin-notebook-lm.iam.gserviceaccount.com
 
 #### Deployment
-- **Cloud Run Service**: https://ai-agency-847424242737.europe-west1.run.app
+- **Cloud Run Service**: https://ai-agency-4ebxrg4hdq-ew.a.run.app
 - **Swagger UI**: /docs endpoint
 - **Health Check**: /healthz endpoint
 - **OpenAPI Schema**: /openapi.json endpoint
@@ -159,7 +195,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Can be safely deleted
 
 **New resources** (europe-west1):
-- Cloud Run: https://ai-agency-847424242737.europe-west1.run.app
+- Cloud Run: https://ai-agency-4ebxrg4hdq-ew.a.run.app
 - Artifact Registry: europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency
 - GCS: merlin-ai-agency-artifacts-eu
 - Cloud SQL: ai-agency-db (europe-west1)

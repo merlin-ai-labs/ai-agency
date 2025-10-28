@@ -46,6 +46,12 @@ async def healthz():
     return {"status": "ok", "service": "ai-agency"}
 
 
+@app.get("/health")
+async def health():
+    """Alternative health check endpoint."""
+    return {"status": "ok", "service": "ai-agency"}
+
+
 @app.post("/runs", response_model=RunResponse)
 async def create_run(req: RunRequest):
     """

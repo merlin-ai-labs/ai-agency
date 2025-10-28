@@ -84,7 +84,12 @@ uvicorn app.main:app --reload
 
 **Access the API:**
 - Swagger UI: http://localhost:8080/docs
-- Health check: http://localhost:8080/health
+- Health check: http://localhost:8080/healthz
+- OpenAPI schema: http://localhost:8080/openapi.json
+
+**Production API (Read-only access):**
+- Production Swagger UI: https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
+- Production OpenAPI: https://ai-agency-4ebxrg4hdq-ew.a.run.app/openapi.json
 
 ---
 
@@ -391,7 +396,9 @@ gcloud projects get-iam-policy merlin-notebook-lm \
 - [Architecture Diagrams](ARCHITECTURE.md) - System design
 - [Coding Standards](CODING_STANDARDS.md) - Python best practices
 - [Deployment Guide](DEPLOYMENT.md) - Multi-cloud deployment
+- [Wave 1 Deployment Notes](WAVE1_DEPLOYMENT_NOTES.md) - Production deployment details
 - [API Documentation](http://localhost:8080/docs) - When running locally
+- [Production API](https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs) - Live production service
 
 ### External Links
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
