@@ -70,7 +70,7 @@ def upgrade() -> None:
         sa.Column('tenant_id', sa.String(), nullable=False),
         sa.Column('document_id', sa.String(), nullable=False),
         sa.Column('content', sa.String(), nullable=False),
-        sa.Column('metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False, server_default='{}'),
+        sa.Column('chunk_metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False, server_default='{}'),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
         sa.PrimaryKeyConstraint('id')
     )

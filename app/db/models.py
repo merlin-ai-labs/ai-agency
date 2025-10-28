@@ -80,8 +80,8 @@ class DocumentChunk(SQLModel, table=True):
     content: str
     # embedding: List[float]  # TODO: Use pgvector type
 
-    # Metadata
-    metadata: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    # Metadata (renamed to avoid SQLAlchemy conflict with reserved 'metadata' attribute)
+    chunk_metadata: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
