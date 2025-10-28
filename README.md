@@ -182,7 +182,7 @@ Auto-deploys on push to main:
 
 ## Development Phases
 
-- **Wave 1** ✅ - Foundation (completed, deployed)
+- **Wave 1** ✅ - Foundation (completed, deployed) - See [docs/wave1/](docs/wave1/)
 - **Wave 2** 🚧 - Core Services (in progress)
 - **Wave 3** ⏳ - RAG Implementation
 - **Wave 4** ⏳ - Business Logic
@@ -193,4 +193,5 @@ Auto-deploys on push to main:
 
 - Check [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for common tasks
 - Review existing code for examples
+- See [docs/wave1/WAVE1_COMPLETE.md](docs/wave1/WAVE1_COMPLETE.md) for Wave 1 context
 - Open an issue for bugs or feature requests
