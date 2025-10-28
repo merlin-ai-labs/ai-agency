@@ -1044,6 +1044,623 @@ At the end of Wave 2, we should have:
 
 ---
 
+## Agent Assignment (Team Coordination - R&D Mode)
+
+**Philosophy:** We're building a proof-of-concept weather agent, not a production enterprise system. Focus on working code, not perfect architecture.
+
+**Team Structure:** Agents work as a coordinated team with tech-lead managing the overall implementation.
+
+---
+
+## Team Roles & Coordination
+
+### Project Manager: tech-lead
+
+**Responsibilities:**
+- Coordinate all phases and agents
+- Make architectural decisions
+- Resolve conflicts between agents
+- Review progress after each phase
+- Ensure consistency across implementations
+- Maintain the implementation log (see below)
+
+**When invoked:**
+- At start of Wave 2 (kickoff)
+- After each phase completion (review)
+- When architectural decisions needed
+- At end of Wave 2 (final review)
+
+### Quality Gates: code-reviewer + code-cleaner
+
+**code-cleaner:**
+- Clean up code before reviews
+- Remove unused imports, dead code
+- Ensure consistent formatting
+- Invoked before each code-reviewer checkpoint
+
+**code-reviewer:**
+- Review code quality and patterns
+- Check for security issues
+- Verify tests are adequate
+- Ensure documentation is clear
+- Invoked after each major phase
+
+**Review checkpoints:**
+1. After Phase 1 (LLM adapters)
+2. After Phase 3 (Database schema)
+3. After Phase 4 (Flow implementation)
+4. Final review before Wave 2 close
+
+---
+
+## Activity Logging (Critical for Resumption)
+
+**WHY:** If Claude crashes or session ends, we need to resume exactly where we left off.
+
+### Log Location
+`docs/wave2 - Core Services/IMPLEMENTATION_LOG.md`
+
+### What to Log (After Each Agent Activity)
+
+Every agent MUST log their work in the following format:
+
+```markdown
+## [Date] Phase X - [Agent Name]
+
+**Status:** ✅ Complete | 🚧 In Progress | ❌ Blocked
+
+**Tasks Completed:**
+- [x] Task 1: Specific description
+- [x] Task 2: Specific description
+- [ ] Task 3: Pending
+
+**Files Created/Modified:**
+- `app/adapters/llm_openai.py` - Created OpenAI adapter
+- `app/core/rate_limiter.py` - Created rate limiter
+- `tests/test_adapters/test_llm_openai.py` - Added tests
+
+**Tests Status:**
+- Unit tests: 15 passing
+- Integration tests: 3 passing
+- Coverage: 85%
+
+**Decisions Made:**
+- Using tenacity library for retry logic
+- In-memory rate limiting (no Redis for R&D)
+- Supporting GPT-4.1 models only for now
+
+**Issues/Blockers:**
+- None
+
+**Next Steps:**
+- Ready for code-cleaner review
+- Then code-reviewer checkpoint
+
+**Time Spent:** 4 hours
+
+**Handoff Notes:**
+For next agent (tools-engineer): OpenAI adapter is ready, rate limiter tested, can now build tools that use LLM.
+```
+
+### Example Log Entry
+
+```markdown
+## 2025-10-28 Phase 1 - llm-engineer
+
+**Status:** ✅ Complete
+
+**Tasks Completed:**
+- [x] Implemented OpenAIAdapter with GPT-4.1 support
+- [x] Implemented VertexAIAdapter with Gemini 2.5
+- [x] Implemented MistralAdapter
+- [x] Created simple token bucket rate limiter
+- [x] Added retry logic with exponential backoff
+- [x] LLMFactory for provider switching
+
+**Files Created:**
+- `app/adapters/llm_openai.py`
+- `app/adapters/llm_vertex.py`
+- `app/adapters/llm_mistral.py`
+- `app/core/rate_limiter.py`
+- `tests/test_adapters/test_llm_openai.py`
+- `tests/test_adapters/test_llm_vertex.py`
+
+**Tests:** 25 passing, 0 failing, Coverage: 88%
+
+**Decisions:**
+- Using httpx for async HTTP calls
+- In-memory dict for rate limiting (Redis later)
+- Supporting latest models only (GPT-4.1, Gemini 2.5)
+
+**Issues:** None
+
+**Next:** Ready for code-cleaner → code-reviewer checkpoint
+
+**Handoff:** LLM adapters ready for tools-engineer to use
+```
+
+### How to Resume After Interruption
+
+1. Read `IMPLEMENTATION_LOG.md`
+2. Check latest entry status
+3. If ✅ Complete: Start next phase
+4. If 🚧 In Progress: Continue from "Tasks Completed"
+5. If ❌ Blocked: Resolve blocker first
+
+---
+
+### Phase 1: Multi-LLM Foundation (llm-engineer)
+
+**Agent:** `llm-engineer`
+**Why:** Specialized in LLM integration, API clients, retry logic
+
+**Tasks:**
+1. Implement OpenAI adapter
+   - Real API calls with httpx
+   - Support GPT-4.1, GPT-4.1-mini, GPT-4.1-nano
+   - Simple retry with tenacity library
+
+2. Implement Vertex AI adapter
+   - Real API calls to Gemini 2.5
+   - Support gemini-2.5-flash, gemini-2.5-pro
+   - Same retry pattern
+
+3. Implement Mistral adapter
+   - Real API calls
+   - Support mistral-medium-3
+   - Same retry pattern
+
+4. Simple rate limiter
+   - Token bucket in-memory (no Redis/distributed yet)
+   - Per-tenant tracking with dict
+   - Tokens per minute only (skip hourly for now)
+
+**Keep Simple:**
+- ❌ No complex fallback chains
+- ❌ No load balancing across accounts
+- ❌ No distributed rate limiting
+- ✅ Just working API calls with basic retry
+
+---
+
+### Phase 2: Weather API Tool (tools-engineer)
+
+**Agent:** `tools-engineer`
+**Why:** Specialized in building business logic tools
+
+**Tasks:**
+1. Weather tool using OpenWeatherMap API
+   - Simple HTTP calls with httpx
+   - Retry on failures (3 attempts)
+   - Parse JSON response
+
+2. Tool registry
+   - Simple dict: `{"weather": WeatherTool}`
+   - `get_tool(name)` function
+
+**Keep Simple:**
+- ❌ No complex tool orchestration
+- ❌ No tool discovery/reflection
+- ✅ Just one working tool with retry
+
+---
+
+### Phase 3: Database Schema (database-engineer)
+
+**Agent:** `database-engineer`
+**Why:** Specialized in database models and migrations
+
+**Tasks:**
+1. Create SQLModel models
+   - `Conversation` table
+   - `ConversationTurn` table
+   - `APIUsage` table (simple tracking)
+
+2. Alembic migration
+   - Generate migration file
+   - Test locally
+
+3. Repository pattern
+   - `ConversationRepository` with basic CRUD
+   - Keep it simple, no fancy querying
+
+**Keep Simple:**
+- ❌ No complex relationships/joins
+- ❌ No query optimization yet
+- ✅ Just working CRUD operations
+
+---
+
+### Phase 4: Weather Agent Flow (flows-engineer)
+
+**Agent:** `flows-engineer`
+**Why:** Specialized in flow orchestration
+
+**Tasks:**
+1. `WeatherAgentFlow` class
+   - Orchestrate: LLM → Tool → LLM → DB
+   - Simple sequential execution
+   - No complex state machines
+
+2. Basic loop logic
+   - Retry on LLMError or ToolError
+   - Max 3 attempts
+   - Exponential backoff (2, 4, 8 seconds)
+
+3. Multi-turn conversations
+   - Pass conversation_id between turns
+   - Load history from DB
+   - Simple list of messages
+
+**Keep Simple:**
+- ❌ No LangGraph yet (overkill for R&D)
+- ❌ No complex decision trees
+- ❌ No streaming (add later)
+- ✅ Just working sequential flow
+
+---
+
+### Phase 5: API Endpoints (flows-engineer)
+
+**Agent:** `flows-engineer` (same agent, simple work)
+**Why:** Already knows the flow, just expose via FastAPI
+
+**Tasks:**
+1. Add routes to `app/main.py`
+   - POST `/api/v1/weather/chat`
+   - GET `/api/v1/weather/conversations/{id}`
+   - GET `/api/v1/weather/models`
+
+2. Pydantic models for request/response
+
+**Keep Simple:**
+- ❌ No versioning strategy yet
+- ❌ No complex auth (add in Wave 5)
+- ✅ Just working endpoints
+
+---
+
+### Phase 6: Testing & Docs (qa-engineer + docs-engineer)
+
+**Agent:** `qa-engineer` (testing), then `docs-engineer` (documentation)
+
+**qa-engineer tasks:**
+1. Write tests for all new code
+   - Mock external APIs (no real API calls in tests)
+   - Test happy path + error cases
+   - Aim for 80% coverage (not 100%)
+
+2. Integration tests
+   - One E2E test with mocked LLM/weather API
+   - Test database persistence
+
+**docs-engineer tasks:**
+1. Update DEVELOPER_GUIDE.md
+   - How to use weather agent
+   - Example API calls
+
+2. Create WEATHER_AGENT_GUIDE.md
+   - Simple usage guide
+   - cURL examples
+
+**Keep Simple:**
+- ❌ No complex test fixtures
+- ❌ No performance testing yet
+- ❌ No extensive documentation
+- ✅ Just enough to understand and use
+
+---
+
+## Agent Invocation Strategy (Team Workflow)
+
+### Team Coordination Flow
+
+**tech-lead** manages the entire Wave 2 implementation and coordinates all agents.
+
+```
+┌─────────────────────────────────────────────┐
+│         Wave 2 Kickoff (tech-lead)          │
+│  - Review master plan                       │
+│  - Set up IMPLEMENTATION_LOG.md             │
+│  - Brief team on R&D guidelines             │
+└─────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────┐
+│         Phase 1: LLM Adapters               │
+│  1. tech-lead assigns llm-engineer          │
+│  2. llm-engineer implements adapters        │
+│  3. llm-engineer logs work                  │
+│  4. code-cleaner cleans up                  │
+│  5. code-reviewer reviews (checkpoint 1)    │
+│  6. tech-lead approves → next phase         │
+└─────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────┐
+│         Phase 2: Weather Tool               │
+│  1. tech-lead assigns tools-engineer        │
+│  2. tools-engineer builds weather tool      │
+│  3. tools-engineer logs work                │
+│  4. tech-lead reviews → next phase          │
+└─────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────┐
+│         Phase 3: Database Schema            │
+│  1. tech-lead assigns database-engineer     │
+│  2. database-engineer creates tables        │
+│  3. database-engineer logs work             │
+│  4. code-cleaner cleans up                  │
+│  5. code-reviewer reviews (checkpoint 2)    │
+│  6. tech-lead approves → next phase         │
+└─────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────┐
+│         Phase 4: Weather Agent Flow         │
+│  1. tech-lead assigns flows-engineer        │
+│  2. flows-engineer builds flow              │
+│  3. flows-engineer logs work                │
+│  4. code-cleaner cleans up                  │
+│  5. code-reviewer reviews (checkpoint 3)    │
+│  6. tech-lead approves → next phase         │
+└─────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────┐
+│         Phase 5: API Endpoints              │
+│  1. tech-lead assigns flows-engineer        │
+│  2. flows-engineer adds endpoints           │
+│  3. flows-engineer logs work                │
+│  4. tech-lead reviews → next phase          │
+└─────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────┐
+│         Phase 6: Testing & Docs             │
+│  1. tech-lead assigns qa-engineer           │
+│  2. qa-engineer writes tests                │
+│  3. qa-engineer logs work                   │
+│  4. tech-lead assigns docs-engineer         │
+│  5. docs-engineer writes guides             │
+│  6. docs-engineer logs work                 │
+└─────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────┐
+│         Final Review & Close                │
+│  1. code-cleaner final cleanup              │
+│  2. code-reviewer final review (checkpoint 4)│
+│  3. tech-lead final assessment              │
+│  4. tech-lead marks Wave 2 complete         │
+│  5. Update IMPLEMENTATION_LOG.md            │
+└─────────────────────────────────────────────┘
+```
+
+### Detailed Workflow Per Phase
+
+```markdown
+## Phase X Workflow
+
+1. **tech-lead kickoff**
+   - Review phase requirements from master plan
+   - Check previous phase completion in IMPLEMENTATION_LOG.md
+   - Assign specialized agent
+   - Set clear deliverables and exit criteria
+
+2. **Specialized agent works**
+   - Implement code following R&D guidelines
+   - Write tests as you go
+   - Run tests locally
+   - Update IMPLEMENTATION_LOG.md continuously
+   - Commit frequently with clear messages
+
+3. **Agent completion**
+   - Final log entry with ✅ Complete status
+   - List all files created/modified
+   - Document decisions and handoff notes
+   - Ensure tests pass
+   - Git commit with descriptive message
+
+4. **Quality check (if checkpoint)**
+   - code-cleaner: Clean up code
+   - code-reviewer: Review quality, tests, patterns
+   - Fixes if needed
+   - Re-log after fixes
+
+5. **tech-lead review**
+   - Verify deliverables match requirements
+   - Test manually
+   - Approve and move to next phase
+   - Update master log
+
+6. **Handoff to next agent**
+   - Next agent reads IMPLEMENTATION_LOG.md
+   - Reviews previous agent's handoff notes
+   - Understands what was built
+   - Continues from there
+```
+
+### If Claude Crashes / Session Ends
+
+```markdown
+## Resumption Protocol
+
+1. **Read IMPLEMENTATION_LOG.md**
+   - Find latest entry
+   - Check status: ✅ Complete | 🚧 In Progress | ❌ Blocked
+
+2. **If 🚧 In Progress:**
+   - Check "Tasks Completed" list
+   - Check "Files Created/Modified" list
+   - Read "Handoff Notes"
+   - Continue incomplete tasks
+
+3. **If ✅ Complete:**
+   - Check if quality gate passed
+   - If yes: Start next phase
+   - If no: Run quality gate (code-cleaner → code-reviewer)
+
+4. **If ❌ Blocked:**
+   - Read "Issues/Blockers"
+   - Resolve blockers first
+   - Then continue implementation
+
+5. **tech-lead always checks continuity:**
+   - Verify previous work still makes sense
+   - Ensure no drift from master plan
+   - Re-brief agent on context if needed
+```
+
+### When to Use Each Agent
+
+**llm-engineer:**
+- Anything touching OpenAI/Vertex/Mistral APIs
+- Rate limiting logic
+- Token estimation
+- Retry patterns for LLM calls
+
+**tools-engineer:**
+- Business logic tools (weather, future tools)
+- External API integrations
+- Tool registry
+
+**database-engineer:**
+- SQLModel models
+- Alembic migrations
+- Repository patterns
+- Database queries
+
+**flows-engineer:**
+- Flow orchestration (combining LLM + tools + DB)
+- Loop logic
+- Multi-turn conversations
+- API endpoint exposure
+
+**qa-engineer:**
+- Writing tests (mock-based + integration)
+- Coverage reports
+- Testing strategy
+
+**docs-engineer:**
+- Usage guides
+- API documentation
+- Code examples
+
+**All Agents Used in Wave 2:**
+
+**Primary Implementation:**
+- ✅ `tech-lead` - Coordinates entire Wave 2, manages phases
+- ✅ `llm-engineer` - LLM adapters, rate limiting
+- ✅ `tools-engineer` - Weather tool, tool registry
+- ✅ `database-engineer` - Database schema, migrations
+- ✅ `flows-engineer` - Flow orchestration, API endpoints
+- ✅ `qa-engineer` - Tests and coverage
+- ✅ `docs-engineer` - Usage guides and examples
+
+**Quality Gates:**
+- ✅ `code-cleaner` - Cleanup before reviews
+- ✅ `code-reviewer` - Review at 4 checkpoints
+
+**Not Needed Yet:**
+- ❌ `devops-engineer` - CI/CD already working (update in Wave 3 if needed)
+- ❌ `security-engineer` - Authentication in Wave 5
+- ❌ `rag-engineer` - RAG implementation in Wave 3
+
+---
+
+## R&D Mode Guidelines
+
+**Keep focused on proof-of-concept:**
+
+### Do:
+✅ Get it working first
+✅ Simple, readable code
+✅ Basic error handling
+✅ Enough tests to verify it works
+✅ Minimal documentation (examples in README)
+
+### Don't:
+❌ Perfect architecture
+❌ Over-abstraction
+❌ Premature optimization
+❌ Complex patterns for simple problems
+❌ Extensive documentation
+
+### Examples of "Keep It Simple"
+
+**Good (R&D):**
+```python
+# Simple retry
+@retry(stop=stop_after_attempt(3), wait=wait_exponential())
+async def call_api():
+    return await client.post(url, json=data)
+```
+
+**Overkill (Production):**
+```python
+# Complex retry with circuit breaker, fallback chains, metrics
+@retry_with_circuit_breaker(
+    max_attempts=5,
+    backoff=ExponentialBackoff(base=2, max=60),
+    circuit_breaker=CircuitBreaker(failure_threshold=10),
+    fallback_chain=[provider1, provider2, provider3],
+    metrics_collector=PrometheusCollector(),
+    jitter=True,
+    timeout=30
+)
+```
+
+**Good (R&D):**
+```python
+# Simple in-memory rate limiter
+rate_limits = {"tenant1": {"tokens": 90000, "reset": datetime.now()}}
+```
+
+**Overkill (Production):**
+```python
+# Distributed rate limiter with Redis, Lua scripts, sliding windows
+redis.evalsha(lua_token_bucket_sha, keys=[tenant_id], args=[...])
+```
+
+---
+
+## Success Criteria for R&D
+
+At the end of Wave 2, we should have:
+
+✅ **Functional:**
+- Can ask "What's weather in Paris?" and get answer
+- Works locally with Docker
+- Works on GCP
+- Conversation saved to database
+- Can switch LLM provider via .env
+
+✅ **Code Quality:**
+- Clean, readable code
+- Basic tests passing
+- No critical bugs
+- Coverage ~80% (not 100%)
+
+✅ **Template:**
+- Other developers can copy the pattern
+- Clear enough to understand
+- Simple enough to modify
+
+❌ **Not Required:**
+- Perfect architecture
+- Production-grade error handling
+- Comprehensive documentation
+- Performance optimization
+- Complex patterns
+
+---
+
+## What Happens After R&D
+
+Once weather agent works, we'll:
+
+1. **Use it as template** for real agents (maturity assessment, grooming)
+2. **Refactor if needed** based on learnings
+3. **Add production features** in later waves (auth, monitoring, etc.)
+4. **Keep it simple** until we need complexity
+
+---
+
 ## Next Steps After Wave 2
 
 With working weather agent, we can:
