@@ -11,10 +11,11 @@ TODO:
 - Add request validation with Pydantic models
 """
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Any
+
 import structlog
+from fastapi import FastAPI
+from pydantic import BaseModel
 
 logger = structlog.get_logger()
 
@@ -29,14 +30,14 @@ class RunRequest(BaseModel):
     """Request to create a new flow execution."""
     flow_name: str  # e.g., "maturity_assessment" or "usecase_grooming"
     tenant_id: str
-    input_data: Dict[str, Any]
+    input_data: dict[str, Any]
 
 
 class RunResponse(BaseModel):
     """Response with run ID and initial status."""
     run_id: str
     status: str  # "queued", "running", "completed", "failed"
-    message: Optional[str] = None
+    message: str | None = None
 
 
 @app.get("/healthz")

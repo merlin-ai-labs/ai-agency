@@ -7,7 +7,8 @@ TODO:
 - Add hybrid search (vector + BM25)
 """
 
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger()
@@ -42,8 +43,8 @@ class VectorRetriever:
         self,
         query: str,
         top_k: int = 5,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Search for relevant documents.
 
@@ -76,10 +77,10 @@ class VectorRetriever:
 
     async def search_by_embedding(
         self,
-        embedding: List[float],
+        embedding: list[float],
         top_k: int = 5,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Search using a pre-computed embedding.
 

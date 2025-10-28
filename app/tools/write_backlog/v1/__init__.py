@@ -9,16 +9,17 @@ TODO:
 - Return artifact URL
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 import structlog
 
 logger = structlog.get_logger()
 
 
 async def write_backlog(
-    ranked_use_cases: List[Dict[str, Any]],
+    ranked_use_cases: list[dict[str, Any]],
     tenant_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Generate and upload backlog document.
 

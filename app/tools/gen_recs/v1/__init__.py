@@ -10,16 +10,17 @@ TODO:
 - Return structured output
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 import structlog
 
 logger = structlog.get_logger()
 
 
 async def generate_recommendations(
-    scores: Dict[str, float],
-    context: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+    scores: dict[str, float],
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
     """
     Generate recommendations based on maturity scores.
 

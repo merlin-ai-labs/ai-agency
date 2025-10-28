@@ -11,8 +11,8 @@ TODO:
 - Store output artifacts to GCS
 """
 
+
 import structlog
-from typing import Optional
 
 logger = structlog.get_logger()
 
@@ -31,7 +31,6 @@ async def poll_and_execute():
     - Commit transaction
     """
     logger.info("poll_and_execute", message="Stub: no runs to process")
-    pass
 
 
 async def execute_run(run_id: str, flow_name: str, input_data: dict):
@@ -73,4 +72,3 @@ async def start_background_poller():
     - Add graceful shutdown handling
     """
     logger.info("start_background_poller", message="Stub: poller not started")
-    pass

@@ -6,8 +6,9 @@ TODO:
 - Add environment-specific overrides (dev/staging/prod)
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):

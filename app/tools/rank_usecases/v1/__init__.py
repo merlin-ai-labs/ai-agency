@@ -9,16 +9,17 @@ TODO:
 - Return ranked list
 """
 
-from typing import List, Dict, Any, Literal
+from typing import Any, Dict, List, Literal
+
 import structlog
 
 logger = structlog.get_logger()
 
 
 async def rank_use_cases(
-    use_cases: List[Dict[str, Any]],
+    use_cases: list[dict[str, Any]],
     method: Literal["rice", "wsjf"] = "rice",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Rank use-cases using RICE or WSJF methodology.
 

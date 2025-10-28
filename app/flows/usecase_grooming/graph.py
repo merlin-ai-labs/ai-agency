@@ -7,7 +7,8 @@ TODO:
 - Emit backlog to GCS
 """
 
-from typing import Dict, Any
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger()
@@ -32,9 +33,8 @@ class UseCaseGroomingFlow:
         # TODO: Load tools from registry
         # self.rank_tool = registry.resolve("rank_usecases", "1.x")
         # self.backlog_tool = registry.resolve("write_backlog", "1.x")
-        pass
 
-    async def run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def run(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Execute the use-case grooming flow.
 

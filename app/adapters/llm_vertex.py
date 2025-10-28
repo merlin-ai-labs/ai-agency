@@ -10,7 +10,9 @@ TODO:
 - Handle rate limits
 """
 
-from typing import List, Dict, Any, Optional, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger()
@@ -45,8 +47,8 @@ class VertexChatModel:
 
     async def complete(
         self,
-        messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> str:
         """
@@ -74,8 +76,8 @@ class VertexChatModel:
 
     async def stream(
         self,
-        messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         """

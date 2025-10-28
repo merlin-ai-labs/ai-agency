@@ -6,7 +6,6 @@ TODO:
 - Add tests for version matching
 """
 
-import pytest
 from app.tools.registry import registry
 
 
@@ -23,7 +22,6 @@ def test_registry_resolve_stub():
     # This will fail until tools are properly registered
     # tool = registry.resolve("parse_docs", "1.x")
     # assert tool is not None
-    pass
 
 
 # TODO: Add tests for each tool

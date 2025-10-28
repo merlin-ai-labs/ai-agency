@@ -7,10 +7,11 @@ TODO:
 - Add soft delete support
 """
 
-from sqlmodel import SQLModel, Field, Column, JSON
-from typing import Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
+from typing import Any
+
+from sqlmodel import JSON, Column, Field, SQLModel
 
 
 class RunStatus(str, Enum):
@@ -37,24 +38,24 @@ class Run(SQLModel, table=True):
 
     __tablename__ = "runs"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: str = Field(unique=True, index=True)
     tenant_id: str = Field(index=True)
     flow_name: str = Field(index=True)  # e.g., "maturity_assessment"
     status: RunStatus = Field(default=RunStatus.QUEUED, index=True)
 
     # Input/Output
-    input_data: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
-    output_data: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
-    error_message: Optional[str] = None
+    input_data: dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    output_data: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    error_message: str | None = None
 
     # Artifacts
     artifact_urls: list[str] = Field(default=[], sa_column=Column(JSON))
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class DocumentChunk(SQLModel, table=True):
@@ -72,7 +73,7 @@ class DocumentChunk(SQLModel, table=True):
 
     __tablename__ = "document_chunks"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     tenant_id: str = Field(index=True)
     document_id: str = Field(index=True)
 
@@ -81,7 +82,7 @@ class DocumentChunk(SQLModel, table=True):
     # embedding: List[float]  # TODO: Use pgvector type
 
     # Metadata (renamed to avoid SQLAlchemy conflict with reserved 'metadata' attribute)
-    chunk_metadata: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    chunk_metadata: dict[str, Any] = Field(default={}, sa_column=Column(JSON))
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -99,10 +100,10 @@ class Tenant(SQLModel, table=True):
 
     __tablename__ = "tenants"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     tenant_id: str = Field(unique=True, index=True)
     name: str
-    settings: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    settings: dict[str, Any] = Field(default={}, sa_column=Column(JSON))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

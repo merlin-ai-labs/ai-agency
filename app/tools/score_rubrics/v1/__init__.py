@@ -10,16 +10,17 @@ TODO:
 - Return structured scores by dimension
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
+
 import structlog
 
 logger = structlog.get_logger()
 
 
 async def score_against_rubrics(
-    extracted_data: Dict[str, Any],
+    extracted_data: dict[str, Any],
     rubric_version: str = "default",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Score extracted content against maturity rubrics.
 

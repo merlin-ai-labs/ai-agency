@@ -7,7 +7,8 @@ TODO:
 - Add deduplication
 """
 
-from typing import List, Dict, Any
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger()
@@ -43,9 +44,9 @@ class DocumentIngestion:
 
     async def ingest_documents(
         self,
-        documents: List[Dict[str, Any]],
+        documents: list[dict[str, Any]],
         tenant_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Ingest documents into the vector store.
 
@@ -76,7 +77,7 @@ class DocumentIngestion:
 
         return result
 
-    def chunk_text(self, text: str) -> List[str]:
+    def chunk_text(self, text: str) -> list[str]:
         """
         Split text into chunks.
 
@@ -96,7 +97,7 @@ class DocumentIngestion:
         # Stub implementation
         return [text]
 
-    async def delete_documents(self, tenant_id: str, document_ids: List[str]):
+    async def delete_documents(self, tenant_id: str, document_ids: list[str]):
         """
         Delete documents from the vector store.
 
@@ -111,4 +112,3 @@ class DocumentIngestion:
         logger.info(
             "ingestion.delete_documents", tenant=tenant_id, count=len(document_ids)
         )
-        pass

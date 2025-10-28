@@ -5,10 +5,11 @@ TODO:
 - Add storage adapters (GCS)
 """
 
-from app.config import settings
+import structlog
+
 from app.adapters.llm_openai import OpenAIChatModel
 from app.adapters.llm_vertex import VertexChatModel
-import structlog
+from app.config import settings
 
 logger = structlog.get_logger()
 
@@ -34,8 +35,7 @@ def get_chat_model(provider: str = None, **kwargs):
     if provider == "openai":
         logger.info("llm_factory", provider="openai")
         return OpenAIChatModel(**kwargs)
-    elif provider == "vertex":
+    if provider == "vertex":
         logger.info("llm_factory", provider="vertex")
         return VertexChatModel(**kwargs)
-    else:
-        raise ValueError(f"Unsupported LLM provider: {provider}")
+    raise ValueError(f"Unsupported LLM provider: {provider}")

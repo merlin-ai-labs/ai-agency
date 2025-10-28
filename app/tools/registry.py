@@ -10,8 +10,9 @@ TODO:
 - Add validation for tool compatibility
 """
 
-from typing import Any, Dict, Optional
 import importlib
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger()
@@ -29,7 +30,7 @@ class ToolRegistry:
     """
 
     def __init__(self):
-        self._tools: Dict[str, Dict[str, Any]] = {}
+        self._tools: dict[str, dict[str, Any]] = {}
         self._load_tools()
 
     def _load_tools(self):
@@ -42,7 +43,6 @@ class ToolRegistry:
         - Build index of tool_name -> versions
         """
         logger.info("registry._load_tools", message="Stub: no tools loaded")
-        pass
 
     def resolve(self, tool_name: str, version_spec: str = "1.x") -> Any:
         """
@@ -73,7 +73,7 @@ class ToolRegistry:
             logger.error("registry.resolve.error", tool=tool_name, error=str(e))
             raise ValueError(f"Tool {tool_name}@{version_spec} not found")
 
-    def list_tools(self) -> Dict[str, list]:
+    def list_tools(self) -> dict[str, list]:
         """
         List all available tools and their versions.
 

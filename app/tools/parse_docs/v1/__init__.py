@@ -10,13 +10,14 @@ TODO:
 - Return structured output
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 import structlog
 
 logger = structlog.get_logger()
 
 
-async def parse_documents(document_urls: List[str]) -> Dict[str, Any]:
+async def parse_documents(document_urls: list[str]) -> dict[str, Any]:
     """
     Parse documents and extract structured data.
 
