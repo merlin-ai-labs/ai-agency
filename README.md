@@ -1,10 +1,34 @@
 # AI Consulting Agency Platform
 
-AI-powered consulting platform for maturity assessments and use case grooming.
+AI-powered consulting platform for maturity assessments and use case grooming with multi-LLM support and RAG capabilities.
 
-**Status:** ✅ Wave 1 Complete - Deployed to Production
+## Quick Start
 
-**Live Service:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
+```bash
+# 1. Clone and setup
+git clone <repo-url>
+cd ConsultingAgency
+python -m venv venv
+source venv/bin/activate
+pip install -e ".[dev]"
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your OPENAI_API_KEY
+
+# 3. Start database
+docker-compose up -d db
+
+# 4. Run migrations
+./scripts/run_migrations.sh
+
+# 5. Start API
+uvicorn app.main:app --reload --port 8080
+```
+
+Visit http://localhost:8080/docs for the interactive API documentation.
+
+**For detailed setup and development workflow, see [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)**
 
 ## Features
 
@@ -14,218 +38,115 @@ AI-powered consulting platform for maturity assessments and use case grooming.
 - 🔍 RAG-powered document analysis with pgvector
 - 🔐 Secure multi-tenant architecture
 - ⚡ Fast async API with FastAPI
-- 📈 Database-backed queue (no Pub/Sub overhead)
 
 ## Tech Stack
 
-- **Backend:** FastAPI + Python 3.11+
-- **Database:** PostgreSQL 15 + pgvector (Cloud SQL)
-- **LLM Providers:** OpenAI, Google Vertex AI
-- **Storage:** Google Cloud Storage
-- **Testing:** pytest with 80%+ coverage target
-- **Deployment:** Docker + Google Cloud Run (europe-west1)
-- **CI/CD:** GitHub Actions (auto-deploy on push to main)
-- **Infrastructure:** Google Cloud Platform (europe-west1 region)
+- **Backend**: FastAPI + Python 3.11+
+- **Database**: PostgreSQL 15 + pgvector
+- **LLM Providers**: OpenAI, Google Vertex AI
+- **Storage**: Google Cloud Storage
+- **Testing**: pytest (current: 8% coverage, target: 80%)
+- **Deployment**: Docker + Google Cloud Run
+- **CI/CD**: GitHub Actions (auto-deploy on push to main)
 
-## Quick Start
+## Production Deployment
 
-### 1. Local Development
+**Live Service**: https://ai-agency-4ebxrg4hdq-ew.a.run.app
 
-```bash
-# Clone and setup
-git clone <repo>
-cd ConsultingAgency
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e ".[dev]"
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your credentials
-
-# Start PostgreSQL with pgvector
-docker-compose up -d db
-
-# Run migrations
-DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency" alembic upgrade head
-
-# Start the API
-uvicorn app.main:app --reload
-```
-
-Access the API at: http://localhost:8080/docs
-
-### 2. Access Production Service
-
-The platform is deployed and running on Google Cloud Run:
-
-```bash
-# API Documentation (Swagger UI)
-https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
-
-# OpenAPI Schema
-https://ai-agency-4ebxrg4hdq-ew.a.run.app/openapi.json
-
-# API Endpoints
-https://ai-agency-4ebxrg4hdq-ew.a.run.app/runs
-```
-
-**Infrastructure Details:**
-- **Region:** europe-west1 (Belgium)
-- **Platform:** Google Cloud Run
-- **Service URL:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
-- **Database:** Cloud SQL PostgreSQL 15 (ai-agency-db)
-- **Storage:** GCS bucket (merlin-ai-agency-artifacts-eu)
-- **Auto-deployment:** Enabled via GitHub Actions on push to main
-
-**Known Issues:**
-- The `/healthz` endpoint returns 404 (Cloud Run routing issue) but `/docs` works correctly
-- Workaround: Use `/docs` endpoint to verify service health
-
-### 3. Run Tests
-
-```bash
-# Activate venv if not already
-source venv/bin/activate
-
-# Run all tests
-pytest -v
-
-# Run with coverage
-pytest --cov=app --cov-report=html
-open htmlcov/index.html
-```
-
-### 3. Code Quality Checks
-
-```bash
-# Linting and formatting
-ruff check app tests
-ruff format app tests
-
-# Type checking
-mypy app
-```
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for comprehensive technical architecture with diagrams:
-- System overview and component architecture
-- Data flow diagrams
-- Database schema (ER diagram)
-- Deployment architecture (local, GCP, multi-cloud)
-- Design patterns and security
-
-## API Endpoints
-
-### Assessments
-- `POST /api/v1/assessments` - Create maturity assessment
-- `GET /api/v1/assessments/{run_id}` - Get assessment results
-
-### Use Cases
-- `POST /api/v1/use-cases/groom` - Groom and prioritize use cases
-- `GET /api/v1/use-cases/{run_id}` - Get grooming results
-
-### Health Check
-- `GET /healthz` - System health status
-
-**Full API documentation:**
-- Local: http://localhost:8080/docs
-- Production: https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
+- **Region**: europe-west1 (Belgium)
+- **Database**: Cloud SQL PostgreSQL 15
+- **Auto-deployment**: Enabled via GitHub Actions
 
 ## Project Structure
 
 ```
 ConsultingAgency/
 ├── app/
-│   ├── api/                 # FastAPI routes and endpoints
-│   ├── core/                # ✅ Base classes, exceptions, decorators
-│   ├── db/                  # ✅ Database models, repositories, migrations
-│   ├── flows/               # Flow orchestration (maturity, grooming)
-│   ├── llm/                 # LLM adapters (OpenAI, Vertex AI)
-│   ├── rag/                 # RAG engine with pgvector
-│   ├── tools/               # Business logic tools (5 core tools)
-│   ├── security/            # Authentication and authorization
-│   └── main.py              # FastAPI application entry point
-├── tests/                   # Test suite (pytest)
-├── docs/                    # ✅ Documentation
-│   ├── AGENT_WORKFLOW.md    # Agent invocation workflow guide
-│   ├── ARCHITECTURE.md      # Technical architecture (diagrams)
-│   ├── CODING_STANDARDS.md  # Python coding standards
-│   ├── DEPLOYMENT.md        # Multi-cloud deployment guide
-│   ├── CODE_REVIEW_CHECKLIST.md
-│   └── WAVE1_REVIEW.md      # Wave 1 implementation review
-├── scripts/                 # ✅ Setup and utility scripts
-├── .github/workflows/       # ✅ CI/CD pipeline
-├── docker-compose.yml       # ✅ Local development environment
-├── alembic.ini              # ✅ Database migration config
-└── pyproject.toml           # ✅ Dependencies and tool config
+│   ├── api/              # API endpoints
+│   ├── core/             # Base classes, exceptions, decorators
+│   ├── db/               # Database models and sessions
+│   ├── flows/            # Business workflows (maturity, grooming)
+│   ├── adapters/         # LLM provider adapters
+│   ├── rag/              # RAG ingestion and retrieval
+│   ├── tools/            # Business logic tools
+│   └── main.py           # FastAPI application
+├── tests/                # Test suite
+├── scripts/              # Setup and utility scripts
+├── docs/                 # Documentation
+├── alembic/              # Database migrations
+└── docker-compose.yml    # Local development services
 ```
 
-**Legend:** ✅ = Implemented | 🚧 = In Progress | ⏳ = Pending
+## Development
 
-## Development Workflow
-
-### Wave-Based Development
-
-The project is being built in 6 coordinated waves using specialized AI agents:
-
-- **Wave 1** ✅ - Foundation (tech-lead, devops-engineer)
-- **Wave 2** 🚧 - Core Services (database-engineer, llm-engineer)
-- **Wave 3** ⏳ - RAG Implementation (rag-engineer)
-- **Wave 4** ⏳ - Business Logic (tools-engineer, flows-engineer)
-- **Wave 5** ⏳ - Quality & Security (qa-engineer, security-engineer, docs-engineer)
-- **Wave 6** ⏳ - Final Review (code-reviewer)
-
-See [docs/WAVE1_REVIEW.md](docs/WAVE1_REVIEW.md) for Wave 1 completion summary.
-
-## Database Portability
-
-The platform supports multiple database providers via simple environment variable configuration:
+### Running Tests
 
 ```bash
-# GCP Cloud SQL
-DATABASE_URL="postgresql+psycopg://user:pass@/dbname?host=/cloudsql/project:region:instance"
-
-# AWS RDS
-DATABASE_URL="postgresql+psycopg://user:pass@host.rds.amazonaws.com:5432/dbname?sslmode=require"
-
-# Azure Database
-DATABASE_URL="postgresql+psycopg://user@server:pass@host.postgres.database.azure.com:5432/dbname?sslmode=require"
-
-# Local Docker
-DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency"
+pytest -v --cov=app
 ```
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed multi-cloud setup.
+### Code Quality
+
+```bash
+ruff check app tests --fix
+ruff format app tests
+mypy app
+```
+
+### Database Migrations
+
+```bash
+# Create migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+```
 
 ## Documentation
 
-- **[AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)** - Agent invocation workflow and best practices
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete technical architecture with diagrams
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history and change log
-- **[CODE_REVIEW_REPORT.md](docs/CODE_REVIEW_REPORT.md)** - Latest code review findings
-- **[CODING_STANDARDS.md](docs/CODING_STANDARDS.md)** - Python coding standards
-- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Multi-cloud deployment guide
-- **[CODE_REVIEW_CHECKLIST.md](docs/CODE_REVIEW_CHECKLIST.md)** - Code review guidelines
-- **[SECURITY_AUDIT_REPORT.md](docs/SECURITY_AUDIT_REPORT.md)** - Security audit findings
-- **[WAVE1_REVIEW.md](docs/WAVE1_REVIEW.md)** - Wave 1 implementation review
-- **[WAVE1_DEPLOYMENT_NOTES.md](docs/WAVE1_DEPLOYMENT_NOTES.md)** - Wave 1 deployment details and known issues
+- **[DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Complete development guide
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical architecture
+- **[CODING_STANDARDS.md](docs/CODING_STANDARDS.md)** - Code style guidelines
+- **[TESTING_GUIDE.md](docs/TESTING_GUIDE.md)** - Testing reference
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history
 
-## Environment Variables
+## API Endpoints
+
+### Core Endpoints
+- `POST /runs` - Create flow execution
+- `GET /runs/{run_id}` - Get run status
+- `GET /health` - Health check
+- `GET /docs` - Interactive API documentation
+
+### Use Cases
+- Maturity assessment flow: `flow_name: "maturity_assessment"`
+- Use case grooming flow: `flow_name: "usecase_grooming"`
+
+Example:
+```bash
+curl -X POST http://localhost:8080/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant_id": "my-company",
+    "flow_name": "maturity_assessment",
+    "input_data": {}
+  }'
+```
+
+## Environment Configuration
 
 Required environment variables:
 
 ```bash
 # Database
-DATABASE_URL=postgresql+psycopg://user:pass@host:5432/dbname
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency
 
 # LLM Provider
-LLM_PROVIDER=openai  # or vertex
-OPENAI_API_KEY=sk-...  # if using OpenAI
-GCP_PROJECT_ID=...     # if using Vertex AI
+LLM_PROVIDER=openai  # or "vertex"
+OPENAI_API_KEY=sk-...
 
-# Storage
+# Storage (for production)
 GCS_BUCKET=your-bucket-name
 
 # Optional
@@ -233,51 +154,43 @@ LOG_LEVEL=INFO
 ENVIRONMENT=development
 ```
 
-See `.env.example` for complete list.
+See `.env.example` for complete configuration.
 
 ## CI/CD Pipeline
 
-GitHub Actions workflows:
-
-### Testing Workflow (`.github/workflows/ci.yml`)
+### Testing (`ci.yml`)
 Runs on every PR and push:
-- ✅ Ruff linting and formatting
-- ✅ mypy type checking (continue-on-error initially)
-- ✅ pytest with 70% coverage requirement
-- ✅ PostgreSQL + pgvector integration tests
-- ✅ Alembic migration tests
-- ✅ Codecov integration
+- Linting and formatting (Ruff)
+- Type checking (mypy)
+- Tests with coverage (pytest)
+- PostgreSQL + pgvector integration tests
 
-### Deployment Workflow (`.github/workflows/deploy.yml`)
+### Deployment (`deploy.yml`)
 Auto-deploys on push to main:
-- ✅ Builds Docker image for linux/amd64
-- ✅ Pushes to Artifact Registry (europe-west1)
-- ✅ Deploys to Cloud Run (europe-west1)
-- ✅ Runs post-deployment smoke tests
-- ✅ Service: https://ai-agency-4ebxrg4hdq-ew.a.run.app
-
-### E2E Testing Workflow (`.github/workflows/e2e-tests.yml`)
-Runs after successful deployment:
-- ✅ Smoke tests on deployed service
-- ✅ Full E2E test suite
-- ✅ Service availability validation
+- Build Docker image
+- Push to Artifact Registry
+- Deploy to Cloud Run
+- Run smoke tests
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Follow coding standards in [docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md)
-4. Write tests (maintain 80%+ coverage)
-5. Run pre-commit hooks: `ruff check && ruff format && mypy app`
-6. Submit a pull request
+1. Create a feature branch
+2. Follow [coding standards](docs/CODING_STANDARDS.md)
+3. Write tests (maintain 80%+ coverage target)
+4. Run quality checks: `ruff check && ruff format && mypy app && pytest`
+5. Submit a pull request
 
-## License
+## Development Phases
 
-[Your License]
+- **Wave 1** ✅ - Foundation (completed, deployed)
+- **Wave 2** 🚧 - Core Services (in progress)
+- **Wave 3** ⏳ - RAG Implementation
+- **Wave 4** ⏳ - Business Logic
+- **Wave 5** ⏳ - Quality & Security
+- **Wave 6** ⏳ - Final Review
 
 ## Support
 
-For issues, questions, or contributions:
-- Open an issue on GitHub
-- See documentation in [docs/](docs/)
-- Check API docs at http://localhost:8080/docs
+- Check [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for common tasks
+- Review existing code for examples
+- Open an issue for bugs or feature requests
