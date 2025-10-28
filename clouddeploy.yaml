@@ -1,0 +1,47 @@
+# Cloud Run Deployment Configuration
+# Deploy with: gcloud run services replace clouddeploy.yaml
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ai-agency
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '10'
+        run.googleapis.com/startup-cpu-boost: 'true'
+    spec:
+      serviceAccountName: ai-agency-runner@merlin-notebook-lm.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: us-central1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest
+        ports:
+        - name: http1
+          containerPort: 8080
+        env:
+        - name: GCP_PROJECT_ID
+          value: "merlin-notebook-lm"
+        - name: GCS_BUCKET
+          value: "merlin-ai-agency-artifacts"
+        - name: LLM_PROVIDER
+          value: "openai"
+        - name: VERTEX_AI_LOCATION
+          value: "us-central1"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-api-key
+              key: latest
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
