@@ -380,11 +380,11 @@ kill -9 <PID>
 - Keep functions small and focused
 - Prefer composition over inheritance
 
-See [CODING_STANDARDS.md](CODING_STANDARDS.md) for detailed guidelines.
+See [project/CODING_STANDARDS.md](project/CODING_STANDARDS.md) for detailed guidelines.
 
 ## Architecture
 
-For technical architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For technical architecture details, see [project/ARCHITECTURE.md](project/ARCHITECTURE.md).
 
 ## Getting Help
 

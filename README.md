@@ -106,10 +106,16 @@ alembic upgrade head
 ## Documentation
 
 - **[DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Complete development guide
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical architecture
-- **[CODING_STANDARDS.md](docs/CODING_STANDARDS.md)** - Code style guidelines
 - **[TESTING_GUIDE.md](docs/TESTING_GUIDE.md)** - Testing reference
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history
+
+**Project Documentation:**
+- [ARCHITECTURE.md](docs/project/ARCHITECTURE.md) - Technical architecture
+- [CODING_STANDARDS.md](docs/project/CODING_STANDARDS.md) - Code style guidelines
+- [CHANGELOG.md](docs/project/CHANGELOG.md) - Version history
+
+**Wave Documentation:**
+- [Wave 1 artifacts](docs/wave1/) - Foundation and deployment
+- [Wave 2 planning](docs/wave2/) - Current development phase
 
 ## API Endpoints
 
@@ -175,7 +181,7 @@ Auto-deploys on push to main:
 ## Contributing
 
 1. Create a feature branch
-2. Follow [coding standards](docs/CODING_STANDARDS.md)
+2. Follow [coding standards](docs/project/CODING_STANDARDS.md)
 3. Write tests (maintain 80%+ coverage target)
 4. Run quality checks: `ruff check && ruff format && mypy app && pytest`
 5. Submit a pull request
