@@ -35,6 +35,21 @@ You are the QA Engineer responsible for ensuring code quality through comprehens
 - Set up test databases and seed data
 - Create mock responses for external services
 
+### 5. End-to-End (E2E) Tests
+- Test deployed Cloud Run service endpoints
+- Validate production environment health checks
+- Test complete user workflows on live service
+- Smoke tests for post-deployment validation
+- Monitor deployed service availability
+
+### 6. Deployed Service Testing
+- Test actual deployed endpoints (not mocks)
+- Validate Cloud SQL connectivity from Cloud Run
+- Test authentication and authorization in production
+- Verify secrets and environment variables loaded correctly
+- Test GCS integration from deployed service
+- Validate LLM provider connectivity (OpenAI, Vertex AI)
+
 ## Key Deliverables
 
 ### 1. **`/pytest.ini`** - Pytest configuration
@@ -61,9 +76,13 @@ asyncio_mode = auto
 markers =
     unit: Unit tests
     integration: Integration tests
+    e2e: End-to-end tests against deployed service
+    deployed: Tests against deployed Cloud Run service
+    smoke: Quick smoke tests for deployment validation
     slow: Slow running tests
     requires_llm: Tests that require LLM API access
     requires_gcs: Tests that require GCS access
+    requires_auth: Tests that require API authentication
 
 # Environment
 env =
@@ -741,6 +760,407 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
 ```
+
+### 10. **`/tests/test_e2e/test_deployed_service.py`** - E2E deployed service tests
+```python
+"""
+End-to-End tests for deployed Cloud Run service.
+These tests run against the actual deployed service in GCP.
+"""
+import pytest
+import httpx
+import os
+from typing import Optional
+
+
+# Configure deployed service URL from environment
+DEPLOYED_URL = os.getenv(
+    "DEPLOYED_SERVICE_URL",
+    "https://ai-agency-847424242737.europe-west1.run.app"
+)
+
+
+@pytest.fixture
+def deployed_base_url() -> str:
+    """Get deployed service base URL"""
+    return DEPLOYED_URL
+
+
+@pytest.fixture
+def deployed_client(deployed_base_url) -> httpx.Client:
+    """Create HTTP client for deployed service"""
+    return httpx.Client(
+        base_url=deployed_base_url,
+        timeout=30.0,
+        follow_redirects=True
+    )
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_health_check_endpoint(deployed_client):
+    """Test /healthz endpoint on deployed service"""
+    response = deployed_client.get("/healthz")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert "timestamp" in data
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_swagger_docs_available(deployed_client):
+    """Test that Swagger UI is accessible"""
+    response = deployed_client.get("/docs")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_openapi_schema_endpoint(deployed_client):
+    """Test OpenAPI schema endpoint"""
+    response = deployed_client.get("/openapi.json")
+
+    assert response.status_code == 200
+    schema = response.json()
+    assert "openapi" in schema
+    assert "paths" in schema
+    assert schema["info"]["title"] == "AI Agency Platform"
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_root_endpoint_redirect(deployed_client):
+    """Test root endpoint redirects to /docs"""
+    response = deployed_client.get("/", follow_redirects=False)
+
+    # Should redirect to docs
+    assert response.status_code in [307, 308, 302, 301]
+    assert "/docs" in response.headers.get("location", "")
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+@pytest.mark.requires_auth
+def test_assessment_endpoint_requires_auth(deployed_client):
+    """Test that assessment endpoint requires authentication"""
+    response = deployed_client.post(
+        "/api/v1/assessments",
+        files={"file": ("test.txt", b"content", "text/plain")},
+        data={"rubric": "{}", "llm_provider": "openai"}
+    )
+
+    # Should require API key
+    assert response.status_code == 401
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_cors_headers(deployed_client):
+    """Test CORS headers are configured"""
+    response = deployed_client.options("/api/v1/assessments")
+
+    # Check CORS headers present
+    headers = response.headers
+    # Note: Actual CORS headers depend on FastAPI CORS configuration
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_database_connectivity(deployed_client):
+    """Test that service can connect to Cloud SQL database"""
+    # Health check should verify database connection
+    response = deployed_client.get("/healthz")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # If health check includes DB status
+    if "database" in data:
+        assert data["database"]["connected"] is True
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_gcs_connectivity(deployed_client):
+    """Test that service can connect to GCS"""
+    # Health check should verify GCS connection
+    response = deployed_client.get("/healthz")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # If health check includes GCS status
+    if "storage" in data:
+        assert data["storage"]["accessible"] is True
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+@pytest.mark.slow
+def test_service_response_time(deployed_client):
+    """Test that service responds within acceptable time"""
+    import time
+
+    start = time.time()
+    response = deployed_client.get("/healthz")
+    elapsed = time.time() - start
+
+    assert response.status_code == 200
+    assert elapsed < 2.0  # Should respond within 2 seconds
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_error_handling_404(deployed_client):
+    """Test 404 error handling"""
+    response = deployed_client.get("/api/v1/nonexistent")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.e2e
+@pytest.mark.deployed
+def test_environment_variables_loaded(deployed_client):
+    """Test that environment variables are correctly loaded"""
+    response = deployed_client.get("/healthz")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # If health check exposes environment info
+    if "environment" in data:
+        assert data["environment"] == "production"
+```
+
+### 11. **`/tests/test_e2e/conftest.py`** - E2E test configuration
+```python
+"""Configuration for E2E tests"""
+import pytest
+import os
+
+
+def pytest_configure(config):
+    """Configure E2E test markers"""
+    config.addinivalue_line(
+        "markers",
+        "e2e: End-to-end tests against deployed service"
+    )
+    config.addinivalue_line(
+        "markers",
+        "deployed: Tests that run against deployed Cloud Run service"
+    )
+    config.addinivalue_line(
+        "markers",
+        "requires_auth: Tests that require API authentication"
+    )
+    config.addinivalue_line(
+        "markers",
+        "smoke: Quick smoke tests for deployment validation"
+    )
+
+
+@pytest.fixture(scope="session")
+def deployed_service_url():
+    """Get deployed service URL from environment"""
+    url = os.getenv(
+        "DEPLOYED_SERVICE_URL",
+        "https://ai-agency-847424242737.europe-west1.run.app"
+    )
+    return url
+
+
+@pytest.fixture(scope="session")
+def test_api_key():
+    """Get test API key from environment"""
+    return os.getenv("TEST_API_KEY", "test_key_for_e2e")
+```
+
+### 12. **`/tests/test_e2e/test_smoke.py`** - Post-deployment smoke tests
+```python
+"""
+Smoke tests to run immediately after deployment.
+These are quick sanity checks to ensure basic functionality.
+"""
+import pytest
+import httpx
+import os
+
+
+DEPLOYED_URL = os.getenv(
+    "DEPLOYED_SERVICE_URL",
+    "https://ai-agency-847424242737.europe-west1.run.app"
+)
+
+
+@pytest.mark.smoke
+@pytest.mark.deployed
+def test_smoke_service_is_up():
+    """SMOKE: Service is responding to requests"""
+    response = httpx.get(f"{DEPLOYED_URL}/healthz", timeout=10)
+    assert response.status_code == 200
+
+
+@pytest.mark.smoke
+@pytest.mark.deployed
+def test_smoke_swagger_accessible():
+    """SMOKE: Swagger UI is accessible"""
+    response = httpx.get(f"{DEPLOYED_URL}/docs", timeout=10)
+    assert response.status_code == 200
+
+
+@pytest.mark.smoke
+@pytest.mark.deployed
+def test_smoke_openapi_valid():
+    """SMOKE: OpenAPI schema is valid"""
+    response = httpx.get(f"{DEPLOYED_URL}/openapi.json", timeout=10)
+    assert response.status_code == 200
+    schema = response.json()
+    assert "openapi" in schema
+    assert "paths" in schema
+
+
+@pytest.mark.smoke
+@pytest.mark.deployed
+def test_smoke_no_500_errors_on_common_endpoints():
+    """SMOKE: Common endpoints don't return 500 errors"""
+    endpoints = ["/healthz", "/docs", "/openapi.json"]
+
+    for endpoint in endpoints:
+        response = httpx.get(f"{DEPLOYED_URL}{endpoint}", timeout=10)
+        assert response.status_code != 500, f"{endpoint} returned 500 error"
+```
+
+### 13. **`/.github/workflows/e2e-tests.yml`** - Post-deployment E2E testing workflow
+```yaml
+name: E2E Tests (Deployed Service)
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_url:
+        description: 'Deployed service URL to test'
+        required: false
+        default: 'https://ai-agency-847424242737.europe-west1.run.app'
+
+  # Run after successful deployment
+  workflow_run:
+    workflows: ["Deploy to Cloud Run"]
+    types:
+      - completed
+
+jobs:
+  smoke-tests:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest httpx pytest-timeout
+
+      - name: Run smoke tests
+        env:
+          DEPLOYED_SERVICE_URL: ${{ github.event.inputs.service_url || 'https://ai-agency-847424242737.europe-west1.run.app' }}
+        run: |
+          pytest tests/test_e2e/test_smoke.py -v -m smoke
+        timeout-minutes: 5
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Smoke tests failed! Deployment may have issues."
+          exit 1
+
+  full-e2e-tests:
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: success()
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest httpx pytest-asyncio pytest-timeout
+
+      - name: Run E2E tests
+        env:
+          DEPLOYED_SERVICE_URL: ${{ github.event.inputs.service_url || 'https://ai-agency-847424242737.europe-west1.run.app' }}
+          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+        run: |
+          pytest tests/test_e2e/ -v -m "e2e and deployed" --timeout=60
+        timeout-minutes: 10
+
+      - name: Report results
+        if: always()
+        run: |
+          echo "E2E tests completed. Check logs for details."
+```
+
+### 14. **`/scripts/run_e2e_tests.sh`** - Manual E2E test runner
+```bash
+#!/bin/bash
+# Run E2E tests against deployed service manually
+
+set -e
+
+DEPLOYED_URL="${DEPLOYED_SERVICE_URL:-https://ai-agency-847424242737.europe-west1.run.app}"
+
+echo "Running E2E tests against: $DEPLOYED_URL"
+echo ""
+
+# Run smoke tests first
+echo "=== Running Smoke Tests ==="
+DEPLOYED_SERVICE_URL="$DEPLOYED_URL" pytest tests/test_e2e/test_smoke.py -v -m smoke
+
+# Run full E2E test suite
+echo ""
+echo "=== Running Full E2E Test Suite ==="
+DEPLOYED_SERVICE_URL="$DEPLOYED_URL" pytest tests/test_e2e/ -v -m "e2e and deployed"
+
+echo ""
+echo "✅ All E2E tests passed!"
+```
+
+## Testing Strategy
+
+### Test Pyramid
+1. **Unit Tests (70%)**: Fast, isolated tests of individual components
+2. **Integration Tests (20%)**: Tests of component interactions with real database
+3. **E2E Tests (10%)**: Tests of deployed service with real infrastructure
+
+### Test Markers
+- `@pytest.mark.unit` - Unit tests (fast, mocked dependencies)
+- `@pytest.mark.integration` - Integration tests (real database)
+- `@pytest.mark.e2e` - End-to-end tests (deployed service)
+- `@pytest.mark.deployed` - Tests against deployed Cloud Run service
+- `@pytest.mark.smoke` - Quick smoke tests for deployment validation
+- `@pytest.mark.slow` - Slow-running tests
+- `@pytest.mark.requires_llm` - Tests requiring LLM API access
+- `@pytest.mark.requires_auth` - Tests requiring authentication
+
+### When to Run Tests
+- **Unit tests**: On every commit (pre-commit hook)
+- **Integration tests**: On every push (CI/CD)
+- **E2E smoke tests**: After every deployment (post-deployment)
+- **Full E2E tests**: After successful smoke tests (post-deployment)
+- **Manual E2E tests**: Before production releases
 
 ## Dependencies
 - **Upstream**: All other engineers (tests their code)

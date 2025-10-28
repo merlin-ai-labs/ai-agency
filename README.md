@@ -2,7 +2,9 @@
 
 AI-powered consulting platform for maturity assessments and use case grooming.
 
-**Status:** 🏗️ Wave 1 Complete - Foundation Ready
+**Status:** ✅ Wave 1 Complete - Deployed to Production
+
+**Live Service:** https://ai-agency-847424242737.europe-west1.run.app
 
 ## Features
 
@@ -17,11 +19,13 @@ AI-powered consulting platform for maturity assessments and use case grooming.
 ## Tech Stack
 
 - **Backend:** FastAPI + Python 3.11+
-- **Database:** PostgreSQL 15 + pgvector
+- **Database:** PostgreSQL 15 + pgvector (Cloud SQL)
 - **LLM Providers:** OpenAI, Google Vertex AI
 - **Storage:** Google Cloud Storage
 - **Testing:** pytest with 80%+ coverage target
-- **Deployment:** Docker, Google Cloud Run (multi-cloud ready)
+- **Deployment:** Docker + Google Cloud Run (europe-west1)
+- **CI/CD:** GitHub Actions (auto-deploy on push to main)
+- **Infrastructure:** Google Cloud Platform (europe-west1 region)
 
 ## Quick Start
 
@@ -51,7 +55,29 @@ uvicorn app.main:app --reload
 
 Access the API at: http://localhost:8080/docs
 
-### 2. Run Tests
+### 2. Access Production Service
+
+The platform is deployed and running on Google Cloud Run:
+
+```bash
+# API Documentation (Swagger UI)
+https://ai-agency-847424242737.europe-west1.run.app/docs
+
+# Health Check
+https://ai-agency-847424242737.europe-west1.run.app/healthz
+
+# OpenAPI Schema
+https://ai-agency-847424242737.europe-west1.run.app/openapi.json
+```
+
+**Infrastructure Details:**
+- **Region:** europe-west1 (Belgium)
+- **Platform:** Google Cloud Run
+- **Database:** Cloud SQL PostgreSQL 15 (ai-agency-db)
+- **Storage:** GCS bucket (merlin-ai-agency-artifacts-eu)
+- **Auto-deployment:** Enabled via GitHub Actions on push to main
+
+### 3. Run Tests
 
 ```bash
 # Activate venv if not already
@@ -96,9 +122,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for comprehensive technical arc
 - `GET /api/v1/use-cases/{run_id}` - Get grooming results
 
 ### Health Check
-- `GET /health` - System health status
+- `GET /healthz` - System health status
 
-Full API documentation: http://localhost:8080/docs
+**Full API documentation:**
+- Local: http://localhost:8080/docs
+- Production: https://ai-agency-847424242737.europe-west1.run.app/docs
 
 ## Project Structure
 
@@ -116,6 +144,7 @@ ConsultingAgency/
 │   └── main.py              # FastAPI application entry point
 ├── tests/                   # Test suite (pytest)
 ├── docs/                    # ✅ Documentation
+│   ├── AGENT_WORKFLOW.md    # Agent invocation workflow guide
 │   ├── ARCHITECTURE.md      # Technical architecture (diagrams)
 │   ├── CODING_STANDARDS.md  # Python coding standards
 │   ├── DEPLOYMENT.md        # Multi-cloud deployment guide
@@ -167,10 +196,14 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed multi-cloud setup.
 
 ## Documentation
 
+- **[AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)** - Agent invocation workflow and best practices
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete technical architecture with diagrams
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history and change log
+- **[CODE_REVIEW_REPORT.md](docs/CODE_REVIEW_REPORT.md)** - Latest code review findings
 - **[CODING_STANDARDS.md](docs/CODING_STANDARDS.md)** - Python coding standards
 - **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Multi-cloud deployment guide
 - **[CODE_REVIEW_CHECKLIST.md](docs/CODE_REVIEW_CHECKLIST.md)** - Code review guidelines
+- **[SECURITY_AUDIT_REPORT.md](docs/SECURITY_AUDIT_REPORT.md)** - Security audit findings
 - **[WAVE1_REVIEW.md](docs/WAVE1_REVIEW.md)** - Wave 1 implementation review
 
 ## Environment Variables
@@ -198,8 +231,10 @@ See `.env.example` for complete list.
 
 ## CI/CD Pipeline
 
-GitHub Actions runs on every PR and push to main/develop:
+GitHub Actions workflows:
 
+### Testing Workflow (`.github/workflows/ci.yml`)
+Runs on every PR and push:
 - ✅ Ruff linting and formatting
 - ✅ mypy type checking (continue-on-error initially)
 - ✅ pytest with 70% coverage requirement
@@ -207,7 +242,19 @@ GitHub Actions runs on every PR and push to main/develop:
 - ✅ Alembic migration tests
 - ✅ Codecov integration
 
-See [.github/workflows/ci.yml](.github/workflows/ci.yml)
+### Deployment Workflow (`.github/workflows/deploy.yml`)
+Auto-deploys on push to main:
+- ✅ Builds Docker image for linux/amd64
+- ✅ Pushes to Artifact Registry (europe-west1)
+- ✅ Deploys to Cloud Run (europe-west1)
+- ✅ Runs post-deployment smoke tests
+- ✅ Service: https://ai-agency-847424242737.europe-west1.run.app
+
+### E2E Testing Workflow (`.github/workflows/e2e-tests.yml`)
+Runs after successful deployment:
+- ✅ Smoke tests on deployed service
+- ✅ Full E2E test suite
+- ✅ Health check validation
 
 ## Contributing
 
