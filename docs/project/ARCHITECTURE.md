@@ -651,6 +651,266 @@ postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency
 
 ---
 
+## Infrastructure Service Mapping
+
+This section maps which services and tools are used in each environment: local development, GitHub Actions CI/CD, and GCP production.
+
+### Environment Comparison Table
+
+| Service/Component | Local Development | GitHub Actions | GCP Production | Purpose |
+|-------------------|-------------------|----------------|----------------|---------|
+| **Compute** |
+| Python Runtime | ✅ venv (local) | ✅ Ubuntu runner | ✅ Cloud Run container | Execute application code |
+| Container Runtime | ✅ Docker Desktop/Colima | ✅ Docker (on runner) | ✅ Cloud Run (managed) | Run PostgreSQL locally / Build images |
+| **Database** |
+| PostgreSQL 15 | ✅ Docker container | ✅ Docker service | ✅ Cloud SQL | Primary database |
+| pgvector extension | ✅ In Docker container | ✅ In Docker service | ✅ Enabled in Cloud SQL | Vector similarity search |
+| Database Connection | Direct localhost:5432 | Direct localhost:5432 | Cloud SQL Proxy (unix socket) | Database access |
+| **Storage** |
+| Google Cloud Storage | ❌ Not used locally | ❌ Not used in tests | ✅ GCS bucket | Artifact storage (reports, files) |
+| Local File System | ✅ For development | ✅ For build artifacts | ❌ Ephemeral only | Temporary storage |
+| **Secrets Management** |
+| .env files | ✅ .env (local) | ❌ Not used | ❌ Not used | Local development secrets |
+| GitHub Secrets | ❌ Not used | ✅ Repository secrets | ❌ Not used | CI/CD credentials |
+| GCP Secret Manager | ❌ Not used | ❌ Not used | ✅ For runtime secrets | Production API keys, DB passwords |
+| **Container Registry** |
+| Docker Hub | ❌ Not used | ❌ Not used | ❌ Not used | N/A |
+| GCP Artifact Registry | ❌ Not used | ✅ Push images | ✅ Pull images | Container image storage |
+| **LLM Providers** |
+| OpenAI API | ✅ Via OPENAI_API_KEY | ✅ Via GitHub secret | ✅ Via Secret Manager | LLM completions, embeddings |
+| Vertex AI API | ✅ Via GCP credentials | ❌ Not used in CI | ✅ Via service account | Alternative LLM provider |
+| **Monitoring & Logging** |
+| stdout/stderr | ✅ Console output | ✅ GitHub Actions logs | ❌ Not used | Development logging |
+| Cloud Logging | ❌ Not used | ❌ Not used | ✅ Structured JSON logs | Production log aggregation |
+| Cloud Monitoring | ❌ Not used | ❌ Not used | ✅ Metrics & alerts | Production monitoring |
+| **Networking** |
+| HTTP Server | ✅ Uvicorn (localhost:8080) | ✅ Uvicorn (tests only) | ✅ Uvicorn (0.0.0.0:8080) | API server |
+| Load Balancer | ❌ Not used | ❌ Not used | ✅ Cloud Run (managed) | HTTPS termination, auto-scaling |
+| DNS | ❌ Not used | ❌ Not used | ✅ Cloud Run domain | HTTPS endpoint |
+| **CI/CD** |
+| GitHub Actions | ❌ Not used | ✅ Workflows | ❌ Not used | Automated testing & deployment |
+| Cloud Build | ❌ Not used | ❌ Not used | ❌ Not used (using GitHub Actions) | N/A |
+| **Development Tools** |
+| Ruff (linting) | ✅ Local execution | ✅ In CI pipeline | ❌ Not used | Code quality |
+| pytest | ✅ Local execution | ✅ In CI pipeline | ❌ Not used | Testing |
+| mypy | ✅ Local execution | ✅ In CI pipeline | ❌ Not used | Type checking |
+| Alembic | ✅ Local migrations | ✅ In deploy workflow | ✅ Cloud SQL Proxy | Database schema migrations |
+
+### Service Usage by Environment
+
+#### Local Development Environment
+
+```mermaid
+graph TB
+    subgraph "Developer Laptop"
+        VENV[Python venv<br/>FastAPI + Dependencies]
+        ENV_FILE[.env file<br/>Local secrets]
+
+        subgraph "Docker Desktop / Colima"
+            POSTGRES_LOCAL[PostgreSQL 15 + pgvector<br/>Port 5432]
+        end
+    end
+
+    subgraph "External Services"
+        OPENAI_LOCAL[OpenAI API<br/>via OPENAI_API_KEY]
+    end
+
+    VENV -->|Read config| ENV_FILE
+    VENV -->|localhost:5432| POSTGRES_LOCAL
+    VENV -->|HTTPS API calls| OPENAI_LOCAL
+
+    style VENV fill:#4CAF50
+    style POSTGRES_LOCAL fill:#FF9800
+    style OPENAI_LOCAL fill:#2196F3
+```
+
+**What runs locally:**
+- Python application in venv (hot reload with uvicorn)
+- PostgreSQL + pgvector in Docker container
+- OpenAI API calls (requires API key in .env)
+- No GCS (artifacts saved locally or skipped)
+- No Cloud SQL, Cloud Run, or other GCP services
+
+**Local URLs:**
+- API: http://localhost:8080
+- Database: postgresql://localhost:5432/ai_agency
+- API Docs: http://localhost:8080/docs
+
+---
+
+#### GitHub Actions CI/CD Environment
+
+```mermaid
+graph TB
+    subgraph "GitHub Runner (Ubuntu)"
+        RUNNER[GitHub Actions Runner]
+
+        subgraph "Docker Services"
+            POSTGRES_CI[PostgreSQL 15 + pgvector<br/>Service Container]
+        end
+
+        subgraph "Build Process"
+            PYTEST[pytest<br/>Run tests]
+            RUFF[ruff<br/>Lint & format]
+            MYPY[mypy<br/>Type check]
+            DOCKER_BUILD[Docker build<br/>Create image]
+        end
+
+        SECRETS[GitHub Secrets<br/>GCP_SA_KEY, GCP_PROJECT_ID]
+    end
+
+    subgraph "GCP Services"
+        ARTIFACT_REGISTRY[Artifact Registry<br/>europe-west1]
+        CLOUD_RUN[Cloud Run<br/>Deploy service]
+        CLOUD_SQL_DEPLOY[Cloud SQL<br/>Run migrations]
+    end
+
+    RUNNER -->|Test DB connection| POSTGRES_CI
+    RUNNER -->|Read| SECRETS
+    PYTEST --> POSTGRES_CI
+    DOCKER_BUILD -->|Push image| ARTIFACT_REGISTRY
+    RUNNER -->|gcloud deploy| CLOUD_RUN
+    RUNNER -->|Alembic migrate| CLOUD_SQL_DEPLOY
+
+    style RUNNER fill:#2196F3
+    style POSTGRES_CI fill:#FF9800
+    style ARTIFACT_REGISTRY fill:#4CAF50
+    style CLOUD_RUN fill:#4CAF50
+```
+
+**What runs in GitHub Actions:**
+
+**Testing Phase (.github/workflows/ci.yml):**
+- PostgreSQL service container for integration tests
+- pytest with coverage reporting
+- Ruff linting and formatting checks
+- mypy type checking
+- No external API calls (mocked)
+
+**Deployment Phase (.github/workflows/deploy.yml):**
+- Docker image build (linux/amd64)
+- Push to GCP Artifact Registry (europe-west1)
+- Authenticate with GCP using service account key
+- Run Alembic migrations via Cloud SQL Proxy
+- Deploy new revision to Cloud Run
+- Smoke tests on deployed service
+
+**GitHub Secrets Used:**
+- `GCP_SA_KEY` - Service account JSON key for deployment
+- `GCP_PROJECT_ID` - merlin-notebook-lm
+- `OPENAI_API_KEY` - For smoke tests (optional)
+
+---
+
+#### GCP Production Environment
+
+```mermaid
+graph TB
+    subgraph "GCP Project: merlin-notebook-lm"
+        subgraph "Cloud Run (europe-west1)"
+            CONTAINER[FastAPI Container<br/>Auto-scaling 0-100]
+        end
+
+        subgraph "Cloud SQL (europe-west1)"
+            POSTGRES_PROD[PostgreSQL 15<br/>ai-agency-db<br/>Private IP]
+            PROXY[Cloud SQL Proxy<br/>Unix socket]
+        end
+
+        subgraph "Storage"
+            GCS[GCS Bucket<br/>merlin-ai-agency-artifacts-eu]
+        end
+
+        subgraph "Secrets"
+            SECRET_MGR[Secret Manager<br/>OPENAI_API_KEY<br/>DATABASE_PASSWORD]
+        end
+
+        subgraph "Artifact Registry"
+            REGISTRY[europe-west1-docker.pkg.dev<br/>ai-agency/app]
+        end
+
+        subgraph "Monitoring"
+            LOGGING[Cloud Logging]
+            MONITORING[Cloud Monitoring]
+        end
+    end
+
+    subgraph "External"
+        OPENAI_PROD[OpenAI API]
+        VERTEX_PROD[Vertex AI API]
+    end
+
+    CONTAINER -->|Unix socket| PROXY
+    PROXY -->|Private IP| POSTGRES_PROD
+    CONTAINER -->|Fetch secrets| SECRET_MGR
+    CONTAINER -->|Store/retrieve| GCS
+    CONTAINER -->|Pull image from| REGISTRY
+    CONTAINER -->|Write logs| LOGGING
+    CONTAINER -->|Send metrics| MONITORING
+    CONTAINER -->|API calls| OPENAI_PROD
+    CONTAINER -->|API calls| VERTEX_PROD
+
+    style CONTAINER fill:#4CAF50
+    style POSTGRES_PROD fill:#FF9800
+    style SECRET_MGR fill:#F44336
+    style GCS fill:#2196F3
+```
+
+**What runs in GCP Production:**
+
+**Compute:**
+- Cloud Run service (ai-agency)
+- Region: europe-west1 (Belgium)
+- Auto-scaling: 0-100 instances
+- Container source: Artifact Registry
+
+**Database:**
+- Cloud SQL PostgreSQL 15 (ai-agency-db)
+- pgvector extension enabled
+- Private IP connection via Cloud SQL Proxy
+- Automatic backups enabled
+
+**Storage:**
+- GCS bucket: merlin-ai-agency-artifacts-eu
+- Stores: Reports, generated documents, artifacts
+
+**Secrets:**
+- Secret Manager stores:
+  - OPENAI_API_KEY
+  - DATABASE_PASSWORD (if needed)
+  - Other sensitive credentials
+
+**Monitoring:**
+- Cloud Logging: JSON structured logs
+- Cloud Monitoring: Metrics, uptime checks, alerts
+- Error Reporting: Exception tracking
+
+**External APIs:**
+- OpenAI API (primary LLM provider)
+- Vertex AI API (alternative provider)
+
+**Production URLs:**
+- Service: https://ai-agency-4ebxrg4hdq-ew.a.run.app
+- API Docs: https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
+- Health: https://ai-agency-4ebxrg4hdq-ew.a.run.app/health
+
+---
+
+### Key Differences Summary
+
+| Aspect | Local | GitHub Actions | GCP Production |
+|--------|-------|----------------|----------------|
+| **Database** | Docker container | Docker service | Cloud SQL (managed) |
+| **Secrets** | .env file | GitHub Secrets | Secret Manager |
+| **Storage** | Local filesystem | Runner filesystem | GCS bucket |
+| **Compute** | venv on laptop | Ubuntu runner | Cloud Run containers |
+| **Container Registry** | N/A | Build & push | Pull from Artifact Registry |
+| **Monitoring** | Console logs | GitHub logs | Cloud Logging + Monitoring |
+| **Deployment** | Manual (uvicorn) | Automated (workflow) | Automated (Cloud Run) |
+| **Scaling** | Single process | Single runner | Auto-scaling 0-100 |
+| **Cost** | Free (your hardware) | Free (GitHub) | Pay-per-use (GCP) |
+
+---
+
 ## Technology Stack
 
 ### Backend Framework
