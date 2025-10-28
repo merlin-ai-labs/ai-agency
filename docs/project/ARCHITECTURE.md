@@ -1,1167 +1,476 @@
-# AI Consulting Agency - Technical Architecture
+# Architecture
 
-**Version:** 0.2.1
+**Status:** Wave 1 Complete - Foundation deployed
 **Last Updated:** 2025-10-28
-**Status:** Wave 1 Complete - Deployed to Production
 
-**Production URL:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
+## Overview
 
----
+Simple AI consulting platform built as a monorepo with FastAPI, PostgreSQL + pgvector, and Cloud Run.
 
-## Table of Contents
+**What's Live:**
+- FastAPI API with stub endpoints
+- PostgreSQL 15 with pgvector on Cloud SQL
+- Auto-deploy on push to main via GitHub Actions
+- Local development with Docker Compose
 
-1. [System Overview](#system-overview)
-2. [High-Level Architecture](#high-level-architecture)
-3. [Component Architecture](#component-architecture)
-4. [Data Flow Diagrams](#data-flow-diagrams)
-5. [Database Schema](#database-schema)
-6. [Deployment Architecture](#deployment-architecture)
-7. [Technology Stack](#technology-stack)
-
----
-
-## System Overview
-
-### Purpose
-AI-powered consulting platform that provides:
-- **Maturity Assessments**: AI-driven organizational capability assessments with rubric-based scoring
-- **Use Case Grooming**: Intelligent prioritization and refinement of AI/ML use cases
-
-### Key Characteristics
-- **Lean Monorepo**: Single Python service, no microservices complexity
-- **Database-Backed Queue**: Simple polling instead of Pub/Sub
-- **Multi-Tenant**: Tenant isolation via `tenant_id`
-- **Async-First**: FastAPI with async/await throughout
-- **RAG-Powered**: pgvector for semantic search
+**What's Not Built Yet:**
+- Actual LLM integration (stubs only)
+- RAG implementation (stubs only)
+- Business logic tools (stubs only)
+- Flow orchestration (stubs only)
 
 ---
 
-## High-Level Architecture
+## System Architecture
 
-```mermaid
-graph TB
-    subgraph "Client Layer"
-        API_CLIENT[API Client<br/>REST/HTTP]
-    end
-
-    subgraph "API Layer - FastAPI Service"
-        FASTAPI[FastAPI Application<br/>Port 8080]
-        AUTH[Authentication<br/>API Key/JWT]
-        ROUTER[API Routers<br/>/assessments, /use-cases]
-    end
-
-    subgraph "Business Logic Layer"
-        FLOWS[Flow Orchestrator<br/>maturity_assessment<br/>usecase_grooming]
-        TOOLS[Tool Registry<br/>5 Core Tools]
-        ADAPTERS[LLM Adapters<br/>OpenAI | Vertex AI]
-        RAG[RAG Engine<br/>Document Search]
-    end
-
-    subgraph "Core Infrastructure"
-        BASE[Base Classes<br/>BaseTool, BaseFlow, BaseAdapter]
-        DECORATORS[Decorators<br/>@retry, @timeout, @log_execution]
-        EXCEPTIONS[Exception Hierarchy<br/>AIAgencyError]
-    end
-
-    subgraph "Data Layer"
-        REPO[Repositories<br/>CRUD Operations]
-        SESSION[SQLAlchemy Sessions<br/>Async Engine]
-        MODELS[SQLModel Models<br/>Run, Tenant, DocumentChunk]
-    end
-
-    subgraph "External Services"
-        POSTGRES[(PostgreSQL + pgvector<br/>Vector DB)]
-        OPENAI[OpenAI API<br/>GPT-4, Embeddings]
-        VERTEX[Vertex AI<br/>Gemini Pro]
-        GCS[Google Cloud Storage<br/>Artifacts]
-    end
-
-    subgraph "Background Processing"
-        WORKER[Execution Worker<br/>Polls runs table]
-        QUEUE[Database Queue<br/>runs.status = 'queued']
-    end
-
-    API_CLIENT -->|HTTPS| FASTAPI
-    FASTAPI --> AUTH
-    AUTH --> ROUTER
-    ROUTER --> FLOWS
-    FLOWS --> TOOLS
-    FLOWS --> ADAPTERS
-    FLOWS --> RAG
-    TOOLS --> BASE
-    ADAPTERS --> BASE
-    FLOWS --> BASE
-    BASE --> DECORATORS
-    BASE --> EXCEPTIONS
-    FLOWS --> REPO
-    TOOLS --> REPO
-    RAG --> REPO
-    REPO --> SESSION
-    SESSION --> MODELS
-    MODELS -->|SQL| POSTGRES
-    ADAPTERS -->|API Calls| OPENAI
-    ADAPTERS -->|API Calls| VERTEX
-    FLOWS -->|Store Artifacts| GCS
-    RAG -->|Vector Search| POSTGRES
-    WORKER -->|Poll| QUEUE
-    QUEUE -->|Update| POSTGRES
-    WORKER --> FLOWS
-
-    style FASTAPI fill:#4CAF50
-    style FLOWS fill:#2196F3
-    style POSTGRES fill:#FF9800
-    style WORKER fill:#9C27B0
+```
+┌─────────────┐
+│   Client    │
+└──────┬──────┘
+       │ HTTPS
+       ▼
+┌─────────────────────────────┐
+│  FastAPI Application        │
+│  ┌──────────────────────┐   │
+│  │  API Endpoints       │   │
+│  │  /runs, /health      │   │
+│  └──────────────────────┘   │
+│  ┌──────────────────────┐   │
+│  │  Flow Stubs          │   │
+│  │  (Wave 2)            │   │
+│  └──────────────────────┘   │
+│  ┌──────────────────────┐   │
+│  │  Tool Registry       │   │
+│  │  (Stubs)             │   │
+│  └──────────────────────┘   │
+│  ┌──────────────────────┐   │
+│  │  LLM Adapters        │   │
+│  │  (Stubs)             │   │
+│  └──────────────────────┘   │
+│  ┌──────────────────────┐   │
+│  │  Database Layer      │   │
+│  │  SQLModel + Alembic  │   │
+│  └──────────────────────┘   │
+└──────────┬──────────────────┘
+           │
+           ▼
+  ┌──────────────────┐
+  │   PostgreSQL 15  │
+  │   + pgvector     │
+  └──────────────────┘
 ```
 
 ---
 
-## Component Architecture
+## Database Schema
 
-### 1. API Layer
+Current tables (minimal Wave 1 setup):
 
-```mermaid
-graph LR
-    subgraph "FastAPI Application"
-        MAIN[main.py<br/>App Instance]
-        MIDDLEWARE[Middleware<br/>CORS, Logging, Error Handling]
-
-        subgraph "API Routes"
-            ASSESS_ROUTER[/api/v1/assessments<br/>POST, GET]
-            USECASE_ROUTER[/api/v1/use-cases<br/>POST, GET]
-            HEALTH_ROUTER[/health<br/>GET]
-        end
-    end
-
-    MAIN --> MIDDLEWARE
-    MIDDLEWARE --> ASSESS_ROUTER
-    MIDDLEWARE --> USECASE_ROUTER
-    MIDDLEWARE --> HEALTH_ROUTER
-```
-
-**Purpose:**
-- REST API endpoints for client interaction
-- Request validation using Pydantic models
-- Authentication and authorization
-- OpenAPI/Swagger documentation at `/docs`
-
----
-
-### 2. Flow Orchestration Layer
-
-```mermaid
-graph TB
-    subgraph "Flow Orchestrator"
-        BASE_FLOW[BaseFlow<br/>Abstract Base Class]
-
-        subgraph "Concrete Flows"
-            MATURITY[MaturityAssessmentFlow<br/>7-step assessment]
-            GROOMING[UseCaseGroomingFlow<br/>5-step grooming]
-        end
-
-        BASE_FLOW -.implements.-> MATURITY
-        BASE_FLOW -.implements.-> GROOMING
-    end
-
-    subgraph "Flow Execution"
-        VALIDATE[validate<br/>Input validation]
-        RUN[run<br/>Execute flow steps]
-        HANDLE_ERROR[handle_error<br/>Error recovery]
-    end
-
-    MATURITY --> VALIDATE
-    GROOMING --> VALIDATE
-    VALIDATE --> RUN
-    RUN --> HANDLE_ERROR
-
-    subgraph "Flow Steps"
-        STEP1[Step 1: Extract Context]
-        STEP2[Step 2: Generate Prompt]
-        STEP3[Step 3: Call LLM]
-        STEP4[Step 4: Parse Response]
-        STEP5[Step 5: Store Results]
-    end
-
-    RUN --> STEP1
-    STEP1 --> STEP2
-    STEP2 --> STEP3
-    STEP3 --> STEP4
-    STEP4 --> STEP5
-```
-
-**Purpose:**
-- Orchestrate multi-step AI workflows
-- Manage state transitions (queued → running → completed/failed)
-- Coordinate between tools, adapters, and database
-- Handle retries and error recovery
-
----
-
-### 3. Tool System Architecture
-
-```mermaid
-graph TB
-    subgraph "Tool Registry"
-        REGISTRY[ToolRegistry<br/>Singleton Pattern]
-        TOOL_MAP[Tool Name → Tool Instance]
-    end
-
-    subgraph "Base Tool Infrastructure"
-        BASE_TOOL[BaseTool<br/>Abstract Base Class]
-
-        VALIDATE[validate_input<br/>Schema validation]
-        EXECUTE[execute<br/>Tool logic]
-        RUN[run<br/>Wrapper with logging]
-    end
-
-    subgraph "Concrete Tools"
-        DOC_SEARCH[DocumentSearchTool<br/>RAG Vector Search]
-        RUBRIC_SCORE[RubricScoringTool<br/>Scoring Logic]
-        PRIORITIZE[PrioritizationTool<br/>Ranking Algorithm]
-        REPORT_GEN[ReportGeneratorTool<br/>Markdown Generation]
-        STORAGE[StorageTool<br/>GCS Upload]
-    end
-
-    REGISTRY --> TOOL_MAP
-    TOOL_MAP --> DOC_SEARCH
-    TOOL_MAP --> RUBRIC_SCORE
-    TOOL_MAP --> PRIORITIZE
-    TOOL_MAP --> REPORT_GEN
-    TOOL_MAP --> STORAGE
-
-    BASE_TOOL -.implements.-> DOC_SEARCH
-    BASE_TOOL -.implements.-> RUBRIC_SCORE
-    BASE_TOOL -.implements.-> PRIORITIZE
-    BASE_TOOL -.implements.-> REPORT_GEN
-    BASE_TOOL -.implements.-> STORAGE
-
-    BASE_TOOL --> VALIDATE
-    BASE_TOOL --> EXECUTE
-    BASE_TOOL --> RUN
-
-    style REGISTRY fill:#FFC107
-    style BASE_TOOL fill:#2196F3
-```
-
-**Purpose:**
-- Reusable business logic components
-- Version-controlled tool implementations
-- Input validation and error handling
-- Execution tracking and logging
-
----
-
-### 4. LLM Adapter Architecture
-
-```mermaid
-graph TB
-    subgraph "Adapter Layer"
-        BASE_ADAPTER[BaseAdapter<br/>Abstract Base Class]
-
-        subgraph "Provider Adapters"
-            OPENAI_ADAPTER[OpenAIAdapter<br/>GPT-4, text-embedding-ada-002]
-            VERTEX_ADAPTER[VertexAIAdapter<br/>Gemini Pro, text-embedding-004]
-        end
-
-        BASE_ADAPTER -.implements.-> OPENAI_ADAPTER
-        BASE_ADAPTER -.implements.-> VERTEX_ADAPTER
-    end
-
-    subgraph "Core Methods"
-        COMPLETE[complete<br/>Chat completion]
-        COMPLETE_META[complete_with_metadata<br/>+ token usage, latency]
-        CREATE_MSG[create_message<br/>Message formatting]
-    end
-
-    OPENAI_ADAPTER --> COMPLETE
-    VERTEX_ADAPTER --> COMPLETE
-    COMPLETE --> COMPLETE_META
-    COMPLETE_META --> CREATE_MSG
-
-    subgraph "Features"
-        RETRY[Retry Logic<br/>@retry decorator]
-        TIMEOUT[Timeout Handling<br/>@timeout decorator]
-        LOGGING[Execution Logging<br/>@log_execution]
-        RATE_LIMIT[Rate Limiting<br/>Token bucket]
-    end
-
-    COMPLETE --> RETRY
-    COMPLETE --> TIMEOUT
-    COMPLETE --> LOGGING
-    COMPLETE --> RATE_LIMIT
-
-    subgraph "External APIs"
-        OPENAI_API[OpenAI API]
-        VERTEX_API[Vertex AI API]
-    end
-
-    OPENAI_ADAPTER -->|HTTPS| OPENAI_API
-    VERTEX_ADAPTER -->|HTTPS| VERTEX_API
-
-    style BASE_ADAPTER fill:#4CAF50
-    style OPENAI_ADAPTER fill:#00ACC1
-    style VERTEX_ADAPTER fill:#00ACC1
-```
-
-**Purpose:**
-- Unified interface for multiple LLM providers
-- Provider-specific implementation details hidden
-- Automatic retries, timeouts, rate limiting
-- Token usage and cost tracking
-
----
-
-### 5. RAG Engine Architecture
-
-```mermaid
-graph TB
-    subgraph "RAG Pipeline"
-        INGESTION[Document Ingestion]
-        CHUNKING[Text Chunking<br/>Overlapping windows]
-        EMBEDDING[Embedding Generation<br/>OpenAI text-embedding-ada-002]
-        STORAGE_VEC[Vector Storage<br/>pgvector]
-    end
-
-    subgraph "Retrieval"
-        QUERY[User Query]
-        QUERY_EMBED[Query Embedding]
-        VECTOR_SEARCH[Cosine Similarity Search<br/>IVFFlat Index]
-        RERANK[Reranking<br/>Optional]
-        RESULTS[Top-K Results]
-    end
-
-    subgraph "Generation"
-        CONTEXT[Context Assembly]
-        PROMPT[Prompt Construction]
-        LLM_CALL[LLM Completion]
-        RESPONSE[Final Response]
-    end
-
-    INGESTION --> CHUNKING
-    CHUNKING --> EMBEDDING
-    EMBEDDING --> STORAGE_VEC
-
-    QUERY --> QUERY_EMBED
-    QUERY_EMBED --> VECTOR_SEARCH
-    VECTOR_SEARCH -->|pgvector| POSTGRES[(PostgreSQL<br/>document_chunks)]
-    POSTGRES --> RERANK
-    RERANK --> RESULTS
-
-    RESULTS --> CONTEXT
-    CONTEXT --> PROMPT
-    PROMPT --> LLM_CALL
-    LLM_CALL --> RESPONSE
-
-    style VECTOR_SEARCH fill:#FF9800
-    style POSTGRES fill:#FF9800
-```
-
-**Purpose:**
-- Semantic document search using vector embeddings
-- Efficient similarity search with pgvector's IVFFlat index
-- Context-aware LLM responses
-- Support for large document collections
-
----
-
-### 6. Database Architecture
-
-```mermaid
-erDiagram
-    TENANTS ||--o{ RUNS : has
-    TENANTS ||--o{ DOCUMENT_CHUNKS : has
-
-    TENANTS {
-        int id PK
-        string tenant_id UK "Unique tenant identifier"
-        string name
-        json settings "Tenant configuration"
-        datetime created_at
-        datetime updated_at
-    }
-
-    RUNS {
-        int id PK
-        string run_id UK "Unique run identifier"
-        string tenant_id FK "Tenant isolation"
-        string flow_name "maturity_assessment | usecase_grooming"
-        string status "queued | running | completed | failed"
-        json input_data "Flow input parameters"
-        json output_data "Flow results"
-        string error_message "Failure reason"
-        json artifact_urls "GCS URLs"
-        datetime created_at
-        datetime started_at
-        datetime completed_at
-    }
-
-    DOCUMENT_CHUNKS {
-        int id PK
-        string tenant_id FK "Tenant isolation"
-        string document_id "Source document"
-        string content "Text chunk"
-        vector-1536 embedding "OpenAI embedding"
-        json chunk_metadata "Flexible metadata"
-        datetime created_at
-    }
-```
-
-**Key Indexes:**
+### runs
+Main execution tracking table (stub implementation for now)
 
 ```sql
--- Runs table indexes (efficient polling and filtering)
-CREATE INDEX ix_runs_status_created_at ON runs (status, created_at);
-CREATE INDEX ix_runs_tenant_flow ON runs (tenant_id, flow_name);
+CREATE TABLE runs (
+    id UUID PRIMARY KEY,
+    run_id VARCHAR UNIQUE NOT NULL,
+    tenant_id VARCHAR NOT NULL,
+    flow_name VARCHAR NOT NULL,  -- 'maturity_assessment' | 'usecase_grooming'
+    status VARCHAR NOT NULL,       -- 'queued' | 'running' | 'completed' | 'failed'
+    input_data JSONB,
+    output_data JSONB,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
 
--- Document chunks indexes (vector similarity search)
-CREATE INDEX ix_document_chunks_embedding ON document_chunks
-  USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX idx_runs_tenant_id ON runs(tenant_id);
+CREATE INDEX idx_runs_status ON runs(status);
 ```
 
-**Purpose:**
-- **tenants**: Multi-tenant isolation and configuration
-- **runs**: Database-backed queue for flow execution
-- **document_chunks**: RAG vector storage with pgvector
+### tenants (placeholder)
+```sql
+CREATE TABLE tenants (
+    id UUID PRIMARY KEY,
+    tenant_id VARCHAR UNIQUE NOT NULL,
+    name VARCHAR,
+    settings JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
 
----
+### document_chunks (pgvector, for Wave 2+)
+```sql
+CREATE TABLE document_chunks (
+    id UUID PRIMARY KEY,
+    tenant_id VARCHAR NOT NULL,
+    document_id VARCHAR NOT NULL,
+    chunk_text TEXT NOT NULL,
+    embedding vector(1536),  -- pgvector
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
-## Data Flow Diagrams
-
-### Maturity Assessment Flow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API
-    participant Flow
-    participant Tools
-    participant LLM
-    participant DB
-    participant GCS
-
-    Client->>API: POST /api/v1/assessments
-    API->>DB: Create run (status=queued)
-    API-->>Client: 202 Accepted {run_id}
-
-    Note over Flow,DB: Background Worker Polls Queue
-
-    Flow->>DB: Poll for queued runs
-    DB-->>Flow: Run with status=queued
-    Flow->>DB: Update status=running
-
-    Flow->>Tools: DocumentSearchTool.run()
-    Tools->>DB: Vector search (pgvector)
-    DB-->>Tools: Relevant context
-    Tools-->>Flow: Search results
-
-    Flow->>LLM: Complete with context
-    LLM-->>Flow: Assessment response
-
-    Flow->>Tools: RubricScoringTool.run()
-    Tools-->>Flow: Scores by dimension
-
-    Flow->>Tools: ReportGeneratorTool.run()
-    Tools-->>Flow: Markdown report
-
-    Flow->>Tools: StorageTool.run()
-    Tools->>GCS: Upload report
-    GCS-->>Tools: GCS URL
-    Tools-->>Flow: Artifact URL
-
-    Flow->>DB: Update status=completed, output_data, artifact_urls
-
-    Client->>API: GET /api/v1/assessments/{run_id}
-    API->>DB: Query run by run_id
-    DB-->>API: Run with results
-    API-->>Client: 200 OK {assessment_data}
+CREATE INDEX idx_chunks_tenant ON document_chunks(tenant_id);
+-- Vector search index added in Wave 2
 ```
 
 ---
 
-### Use Case Grooming Flow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API
-    participant Flow
-    participant Tools
-    participant LLM
-    participant DB
-    participant GCS
-
-    Client->>API: POST /api/v1/use-cases/groom
-    API->>DB: Create run (status=queued)
-    API-->>Client: 202 Accepted {run_id}
-
-    Flow->>DB: Poll for queued runs
-    DB-->>Flow: Run with status=queued
-    Flow->>DB: Update status=running
-
-    Flow->>LLM: Extract features from descriptions
-    LLM-->>Flow: Structured use cases
-
-    Flow->>Tools: PrioritizationTool.run()
-    Tools->>LLM: Score by impact/feasibility
-    LLM-->>Tools: Scores
-    Tools-->>Flow: Ranked use cases
-
-    Flow->>Tools: ReportGeneratorTool.run()
-    Tools-->>Flow: Grooming report
-
-    Flow->>Tools: StorageTool.run()
-    Tools->>GCS: Upload report
-    GCS-->>Tools: GCS URL
-    Tools-->>Flow: Artifact URL
-
-    Flow->>DB: Update status=completed
-
-    Client->>API: GET /api/v1/use-cases/{run_id}
-    API->>DB: Query run
-    DB-->>API: Run with results
-    API-->>Client: 200 OK {groomed_use_cases}
-```
-
----
-
-## Deployment Architecture
+## Infrastructure Mapping
 
 ### Local Development
 
-```mermaid
-graph TB
-    subgraph "Developer Machine"
-        DOCKER[Docker Compose]
+```
+Developer Laptop
+├── Python venv (FastAPI app)
+├── Docker (PostgreSQL + pgvector)
+└── .env (secrets)
 
-        subgraph "Containers"
-            DB_CONTAINER[PostgreSQL + pgvector<br/>Port 5432]
-            APP_CONTAINER[FastAPI App<br/>Port 8080<br/>Hot Reload]
-        end
-
-        VENV[Python venv<br/>Local execution]
-    end
-
-    DOCKER --> DB_CONTAINER
-    DOCKER --> APP_CONTAINER
-    APP_CONTAINER -->|Database URL| DB_CONTAINER
-    VENV -->|Development| APP_CONTAINER
+External:
+└── OpenAI API (via OPENAI_API_KEY)
 ```
 
----
+**What you need:**
+- Docker or Colima
+- Python 3.11+
+- OpenAI API key in .env
 
-### GCP Production Deployment
-
-```mermaid
-graph TB
-    subgraph "GCP Project"
-        subgraph "Cloud Run"
-            APP_INSTANCE[FastAPI Container<br/>Auto-scaling<br/>0-100 instances]
-        end
-
-        subgraph "Cloud SQL"
-            POSTGRES[PostgreSQL 15<br/>+ pgvector<br/>Private IP]
-            CLOUD_SQL_PROXY[Cloud SQL Proxy<br/>Secure Connection]
-        end
-
-        subgraph "Storage"
-            GCS_BUCKET[GCS Bucket<br/>Artifacts Storage]
-        end
-
-        subgraph "Secrets"
-            SECRET_MGR[Secret Manager<br/>API Keys, DB Credentials]
-        end
-
-        subgraph "Monitoring"
-            CLOUD_LOGGING[Cloud Logging<br/>Structured JSON Logs]
-            CLOUD_MONITORING[Cloud Monitoring<br/>Metrics & Alerts]
-        end
-
-        subgraph "External"
-            OPENAI_EXT[OpenAI API]
-            VERTEX_EXT[Vertex AI API]
-        end
-    end
-
-    subgraph "Client"
-        HTTPS_CLIENT[HTTPS Client]
-    end
-
-    HTTPS_CLIENT -->|HTTPS| APP_INSTANCE
-    APP_INSTANCE --> CLOUD_SQL_PROXY
-    CLOUD_SQL_PROXY -->|Private IP| POSTGRES
-    APP_INSTANCE -->|API Calls| GCS_BUCKET
-    APP_INSTANCE -->|Fetch Secrets| SECRET_MGR
-    APP_INSTANCE -->|Logs| CLOUD_LOGGING
-    APP_INSTANCE -->|Metrics| CLOUD_MONITORING
-    APP_INSTANCE -->|API Calls| OPENAI_EXT
-    APP_INSTANCE -->|API Calls| VERTEX_EXT
-
-    style APP_INSTANCE fill:#4CAF50
-    style POSTGRES fill:#FF9800
-    style SECRET_MGR fill:#F44336
-```
-
-**Key Features:**
-- **Auto-scaling**: Cloud Run scales 0→100 based on traffic
-- **Secure DB Connection**: Cloud SQL Proxy with private IP
-- **Secrets Management**: All credentials in Secret Manager
-- **Monitoring**: Structured logging + metrics + alerts
-
----
-
-### Multi-Cloud Database Portability
-
-```mermaid
-graph TB
-    subgraph "Application"
-        APP[FastAPI App]
-        CONFIG[Environment Config<br/>DATABASE_URL]
-    end
-
-    APP --> CONFIG
-
-    subgraph "Database Providers"
-        GCP[GCP Cloud SQL<br/>PostgreSQL]
-        AWS[AWS RDS<br/>PostgreSQL]
-        AZURE[Azure Database<br/>PostgreSQL]
-        LOCAL[Local PostgreSQL<br/>Docker]
-    end
-
-    CONFIG -.->|Switch via env var| GCP
-    CONFIG -.->|Switch via env var| AWS
-    CONFIG -.->|Switch via env var| AZURE
-    CONFIG -.->|Switch via env var| LOCAL
-
-    style CONFIG fill:#FFC107
-```
-
-**Connection Strings:**
-```bash
-# GCP Cloud SQL
-postgresql+psycopg://user:pass@/dbname?host=/cloudsql/project:region:instance
-
-# AWS RDS
-postgresql+psycopg://user:pass@rds-instance.region.rds.amazonaws.com:5432/dbname?sslmode=require
-
-# Azure Database
-postgresql+psycopg://user@server:pass@server.postgres.database.azure.com:5432/dbname?sslmode=require
-
-# Local Docker
-postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency
-```
-
----
-
-## Infrastructure Service Mapping
-
-This section maps which services and tools are used in each environment: local development, GitHub Actions CI/CD, and GCP production.
-
-### Environment Comparison Table
-
-| Service/Component | Local Development | GitHub Actions | GCP Production | Purpose |
-|-------------------|-------------------|----------------|----------------|---------|
-| **Compute** |
-| Python Runtime | ✅ venv (local) | ✅ Ubuntu runner | ✅ Cloud Run container | Execute application code |
-| Container Runtime | ✅ Docker Desktop/Colima | ✅ Docker (on runner) | ✅ Cloud Run (managed) | Run PostgreSQL locally / Build images |
-| **Database** |
-| PostgreSQL 15 | ✅ Docker container | ✅ Docker service | ✅ Cloud SQL | Primary database |
-| pgvector extension | ✅ In Docker container | ✅ In Docker service | ✅ Enabled in Cloud SQL | Vector similarity search |
-| Database Connection | Direct localhost:5432 | Direct localhost:5432 | Cloud SQL Proxy (unix socket) | Database access |
-| **Storage** |
-| Google Cloud Storage | ❌ Not used locally | ❌ Not used in tests | ✅ GCS bucket | Artifact storage (reports, files) |
-| Local File System | ✅ For development | ✅ For build artifacts | ❌ Ephemeral only | Temporary storage |
-| **Secrets Management** |
-| .env files | ✅ .env (local) | ❌ Not used | ❌ Not used | Local development secrets |
-| GitHub Secrets | ❌ Not used | ✅ Repository secrets | ❌ Not used | CI/CD credentials |
-| GCP Secret Manager | ❌ Not used | ❌ Not used | ✅ For runtime secrets | Production API keys, DB passwords |
-| **Container Registry** |
-| Docker Hub | ❌ Not used | ❌ Not used | ❌ Not used | N/A |
-| GCP Artifact Registry | ❌ Not used | ✅ Push images | ✅ Pull images | Container image storage |
-| **LLM Providers** |
-| OpenAI API | ✅ Via OPENAI_API_KEY | ✅ Via GitHub secret | ✅ Via Secret Manager | LLM completions, embeddings |
-| Vertex AI API | ✅ Via GCP credentials | ❌ Not used in CI | ✅ Via service account | Alternative LLM provider |
-| **Monitoring & Logging** |
-| stdout/stderr | ✅ Console output | ✅ GitHub Actions logs | ❌ Not used | Development logging |
-| Cloud Logging | ❌ Not used | ❌ Not used | ✅ Structured JSON logs | Production log aggregation |
-| Cloud Monitoring | ❌ Not used | ❌ Not used | ✅ Metrics & alerts | Production monitoring |
-| **Networking** |
-| HTTP Server | ✅ Uvicorn (localhost:8080) | ✅ Uvicorn (tests only) | ✅ Uvicorn (0.0.0.0:8080) | API server |
-| Load Balancer | ❌ Not used | ❌ Not used | ✅ Cloud Run (managed) | HTTPS termination, auto-scaling |
-| DNS | ❌ Not used | ❌ Not used | ✅ Cloud Run domain | HTTPS endpoint |
-| **CI/CD** |
-| GitHub Actions | ❌ Not used | ✅ Workflows | ❌ Not used | Automated testing & deployment |
-| Cloud Build | ❌ Not used | ❌ Not used | ❌ Not used (using GitHub Actions) | N/A |
-| **Development Tools** |
-| Ruff (linting) | ✅ Local execution | ✅ In CI pipeline | ❌ Not used | Code quality |
-| pytest | ✅ Local execution | ✅ In CI pipeline | ❌ Not used | Testing |
-| mypy | ✅ Local execution | ✅ In CI pipeline | ❌ Not used | Type checking |
-| Alembic | ✅ Local migrations | ✅ In deploy workflow | ✅ Cloud SQL Proxy | Database schema migrations |
-
-### Service Usage by Environment
-
-#### Local Development Environment
-
-```mermaid
-graph TB
-    subgraph "Developer Laptop"
-        VENV[Python venv<br/>FastAPI + Dependencies]
-        ENV_FILE[.env file<br/>Local secrets]
-
-        subgraph "Docker Desktop / Colima"
-            POSTGRES_LOCAL[PostgreSQL 15 + pgvector<br/>Port 5432]
-        end
-    end
-
-    subgraph "External Services"
-        OPENAI_LOCAL[OpenAI API<br/>via OPENAI_API_KEY]
-    end
-
-    VENV -->|Read config| ENV_FILE
-    VENV -->|localhost:5432| POSTGRES_LOCAL
-    VENV -->|HTTPS API calls| OPENAI_LOCAL
-
-    style VENV fill:#4CAF50
-    style POSTGRES_LOCAL fill:#FF9800
-    style OPENAI_LOCAL fill:#2196F3
-```
-
-**What runs locally:**
-- Python application in venv (hot reload with uvicorn)
-- PostgreSQL + pgvector in Docker container
-- OpenAI API calls (requires API key in .env)
-- No GCS (artifacts saved locally or skipped)
-- No Cloud SQL, Cloud Run, or other GCP services
-
-**Local URLs:**
+**URLs:**
 - API: http://localhost:8080
-- Database: postgresql://localhost:5432/ai_agency
-- API Docs: http://localhost:8080/docs
+- DB: postgresql://localhost:5432/ai_agency
+- Docs: http://localhost:8080/docs
 
 ---
 
-#### GitHub Actions CI/CD Environment
+### GitHub Actions CI/CD
 
-```mermaid
-graph TB
-    subgraph "GitHub Runner (Ubuntu)"
-        RUNNER[GitHub Actions Runner]
-
-        subgraph "Docker Services"
-            POSTGRES_CI[PostgreSQL 15 + pgvector<br/>Service Container]
-        end
-
-        subgraph "Build Process"
-            PYTEST[pytest<br/>Run tests]
-            RUFF[ruff<br/>Lint & format]
-            MYPY[mypy<br/>Type check]
-            DOCKER_BUILD[Docker build<br/>Create image]
-        end
-
-        SECRETS[GitHub Secrets<br/>GCP_SA_KEY, GCP_PROJECT_ID]
-    end
-
-    subgraph "GCP Services"
-        ARTIFACT_REGISTRY[Artifact Registry<br/>europe-west1]
-        CLOUD_RUN[Cloud Run<br/>Deploy service]
-        CLOUD_SQL_DEPLOY[Cloud SQL<br/>Run migrations]
-    end
-
-    RUNNER -->|Test DB connection| POSTGRES_CI
-    RUNNER -->|Read| SECRETS
-    PYTEST --> POSTGRES_CI
-    DOCKER_BUILD -->|Push image| ARTIFACT_REGISTRY
-    RUNNER -->|gcloud deploy| CLOUD_RUN
-    RUNNER -->|Alembic migrate| CLOUD_SQL_DEPLOY
-
-    style RUNNER fill:#2196F3
-    style POSTGRES_CI fill:#FF9800
-    style ARTIFACT_REGISTRY fill:#4CAF50
-    style CLOUD_RUN fill:#4CAF50
+```
+GitHub Runner
+├── PostgreSQL service container (tests)
+├── Ruff, mypy, pytest (quality checks)
+├── Docker build (create image)
+├── Push to Artifact Registry
+├── Alembic migrations (Cloud SQL Proxy)
+└── Deploy to Cloud Run
 ```
 
-**What runs in GitHub Actions:**
-
-**Testing Phase (.github/workflows/ci.yml):**
-- PostgreSQL service container for integration tests
-- pytest with coverage reporting
-- Ruff linting and formatting checks
-- mypy type checking
-- No external API calls (mocked)
-
-**Deployment Phase (.github/workflows/deploy.yml):**
-- Docker image build (linux/amd64)
-- Push to GCP Artifact Registry (europe-west1)
-- Authenticate with GCP using service account key
-- Run Alembic migrations via Cloud SQL Proxy
-- Deploy new revision to Cloud Run
-- Smoke tests on deployed service
-
-**GitHub Secrets Used:**
-- `GCP_SA_KEY` - Service account JSON key for deployment
-- `GCP_PROJECT_ID` - merlin-notebook-lm
-- `OPENAI_API_KEY` - For smoke tests (optional)
-
----
-
-#### GCP Production Environment
-
-```mermaid
-graph TB
-    subgraph "GCP Project: merlin-notebook-lm"
-        subgraph "Cloud Run (europe-west1)"
-            CONTAINER[FastAPI Container<br/>Auto-scaling 0-100]
-        end
-
-        subgraph "Cloud SQL (europe-west1)"
-            POSTGRES_PROD[PostgreSQL 15<br/>ai-agency-db<br/>Private IP]
-            PROXY[Cloud SQL Proxy<br/>Unix socket]
-        end
-
-        subgraph "Storage"
-            GCS[GCS Bucket<br/>merlin-ai-agency-artifacts-eu]
-        end
-
-        subgraph "Secrets"
-            SECRET_MGR[Secret Manager<br/>OPENAI_API_KEY<br/>DATABASE_PASSWORD]
-        end
-
-        subgraph "Artifact Registry"
-            REGISTRY[europe-west1-docker.pkg.dev<br/>ai-agency/app]
-        end
-
-        subgraph "Monitoring"
-            LOGGING[Cloud Logging]
-            MONITORING[Cloud Monitoring]
-        end
-    end
-
-    subgraph "External"
-        OPENAI_PROD[OpenAI API]
-        VERTEX_PROD[Vertex AI API]
-    end
-
-    CONTAINER -->|Unix socket| PROXY
-    PROXY -->|Private IP| POSTGRES_PROD
-    CONTAINER -->|Fetch secrets| SECRET_MGR
-    CONTAINER -->|Store/retrieve| GCS
-    CONTAINER -->|Pull image from| REGISTRY
-    CONTAINER -->|Write logs| LOGGING
-    CONTAINER -->|Send metrics| MONITORING
-    CONTAINER -->|API calls| OPENAI_PROD
-    CONTAINER -->|API calls| VERTEX_PROD
-
-    style CONTAINER fill:#4CAF50
-    style POSTGRES_PROD fill:#FF9800
-    style SECRET_MGR fill:#F44336
-    style GCS fill:#2196F3
-```
-
-**What runs in GCP Production:**
-
-**Compute:**
-- Cloud Run service (ai-agency)
-- Region: europe-west1 (Belgium)
-- Auto-scaling: 0-100 instances
-- Container source: Artifact Registry
-
-**Database:**
-- Cloud SQL PostgreSQL 15 (ai-agency-db)
-- pgvector extension enabled
-- Private IP connection via Cloud SQL Proxy
-- Automatic backups enabled
-
-**Storage:**
-- GCS bucket: merlin-ai-agency-artifacts-eu
-- Stores: Reports, generated documents, artifacts
+**Workflows:**
+- `.github/workflows/ci.yml` - Tests on every PR/push
+- `.github/workflows/deploy.yml` - Deploy on push to main
 
 **Secrets:**
-- Secret Manager stores:
-  - OPENAI_API_KEY
-  - DATABASE_PASSWORD (if needed)
-  - Other sensitive credentials
+- `GCP_SA_KEY` - Service account for deployment
+- `GCP_PROJECT_ID` - merlin-notebook-lm
 
-**Monitoring:**
-- Cloud Logging: JSON structured logs
-- Cloud Monitoring: Metrics, uptime checks, alerts
-- Error Reporting: Exception tracking
+---
 
-**External APIs:**
-- OpenAI API (primary LLM provider)
-- Vertex AI API (alternative provider)
+### GCP Production
 
-**Production URLs:**
+```
+Cloud Run (europe-west1)
+├── FastAPI container (auto-scaling 0-100)
+├── Cloud SQL Proxy → PostgreSQL 15
+├── Secret Manager → OPENAI_API_KEY
+└── GCS bucket → artifacts (future)
+
+External:
+├── OpenAI API
+└── Vertex AI (future)
+```
+
+**Services:**
+- **Cloud Run**: ai-agency (europe-west1)
+- **Cloud SQL**: ai-agency-db (PostgreSQL 15 + pgvector)
+- **GCS**: merlin-ai-agency-artifacts-eu
+- **Artifact Registry**: europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency
+
+**URLs:**
 - Service: https://ai-agency-4ebxrg4hdq-ew.a.run.app
 - API Docs: https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs
 - Health: https://ai-agency-4ebxrg4hdq-ew.a.run.app/health
 
 ---
 
-### Key Differences Summary
-
-| Aspect | Local | GitHub Actions | GCP Production |
-|--------|-------|----------------|----------------|
-| **Database** | Docker container | Docker service | Cloud SQL (managed) |
-| **Secrets** | .env file | GitHub Secrets | Secret Manager |
-| **Storage** | Local filesystem | Runner filesystem | GCS bucket |
-| **Compute** | venv on laptop | Ubuntu runner | Cloud Run containers |
-| **Container Registry** | N/A | Build & push | Pull from Artifact Registry |
-| **Monitoring** | Console logs | GitHub logs | Cloud Logging + Monitoring |
-| **Deployment** | Manual (uvicorn) | Automated (workflow) | Automated (Cloud Run) |
-| **Scaling** | Single process | Single runner | Auto-scaling 0-100 |
-| **Cost** | Free (your hardware) | Free (GitHub) | Pay-per-use (GCP) |
-
----
-
 ## Technology Stack
 
-### Backend Framework
-- **FastAPI** 0.109.0+ - Modern async web framework
-- **Uvicorn** 0.27.0+ - ASGI server with hot reload
-- **Pydantic** 2.5.0+ - Data validation and settings
+### Backend
+- **FastAPI** 0.109+ - Web framework
+- **Uvicorn** - ASGI server
+- **Pydantic** - Data validation
 
-### Database & ORM
-- **PostgreSQL** 15+ - Primary database
-- **pgvector** 0.2.4+ - Vector similarity search
-- **SQLModel** 0.0.14+ - SQLAlchemy + Pydantic integration
-- **Alembic** 1.13.0+ - Database migrations
-- **psycopg** 3.1.0+ - PostgreSQL adapter (async support)
+### Database
+- **PostgreSQL** 15 - Primary database
+- **pgvector** 0.2.4+ - Vector similarity (for Wave 2+)
+- **SQLModel** - ORM (SQLAlchemy + Pydantic)
+- **Alembic** - Schema migrations
+- **psycopg** 3.1+ - Async PostgreSQL adapter
 
-### LLM Providers
-- **OpenAI** - GPT-4, text-embedding-ada-002
-- **Vertex AI** - Gemini Pro, text-embedding-004
+### Cloud (GCP)
+- **Cloud Run** - Serverless containers
+- **Cloud SQL** - Managed PostgreSQL
+- **Secret Manager** - Credentials
+- **GCS** - Object storage (future)
+- **Artifact Registry** - Container images
 
-### Storage
-- **Google Cloud Storage** - Artifact storage
+### Development
+- **Ruff** - Linting + formatting
+- **mypy** - Type checking
+- **pytest** - Testing
+- **Docker Compose** - Local database
 
-### Development Tools
-- **Ruff** - Fast linter & formatter (replaces Black + isort)
-- **mypy** - Static type checking
-- **pytest** - Testing framework with async support
-- **pre-commit** - Git hooks for quality checks
-
-### DevOps
-- **Docker** + **Docker Compose** - Containerization
-- **GitHub Actions** - CI/CD pipeline
-- **Alembic** - Database migration management
-
-### Utilities
-- **structlog** 24.1.0+ - Structured logging
-- **httpx** 0.26.0+ - Async HTTP client
-- **tenacity** 8.2.0+ - Retry logic
-- **python-dotenv** 1.0.0+ - Environment management
+### Future (Wave 2+)
+- **OpenAI** - GPT-4, embeddings
+- **Vertex AI** - Gemini (alternative)
+- **LangGraph** - Flow orchestration (maybe)
 
 ---
 
-## Core Design Patterns
+## Code Structure
 
-### 1. Repository Pattern
-```python
-class BaseRepository(ABC):
-    """Abstract base class for data access."""
-
-    @abstractmethod
-    async def get_by_id(self, id: int) -> Optional[T]: ...
-
-    @abstractmethod
-    async def create(self, obj: T) -> T: ...
-
-    @abstractmethod
-    async def update(self, obj: T) -> T: ...
-
-    @abstractmethod
-    async def delete(self, id: int) -> bool: ...
+```
+app/
+├── api/              # FastAPI routes
+│   └── main.py       # /runs endpoints (stubs)
+├── core/             # Base classes, exceptions, decorators
+│   ├── base.py       # BaseTool, BaseFlow, BaseAdapter
+│   ├── exceptions.py # Exception hierarchy
+│   ├── decorators.py # @retry, @timeout, @log_execution
+│   └── types.py      # Type definitions
+├── db/               # Database layer
+│   ├── models.py     # SQLModel tables
+│   └── base.py       # Session management
+├── adapters/         # LLM providers (stubs)
+│   ├── llm_factory.py
+│   ├── llm_openai.py  # TODO: Wave 2
+│   └── llm_vertex.py  # TODO: Wave 2
+├── tools/            # Business logic (stubs)
+│   └── registry.py   # Tool registration
+├── flows/            # Workflows (stubs)
+│   ├── maturity_assessment/
+│   └── usecase_grooming/
+├── rag/              # Vector search (stubs for Wave 2+)
+│   ├── ingestion.py
+│   └── retriever.py
+└── main.py           # FastAPI app entry point
 ```
 
-### 2. Strategy Pattern (LLM Adapters)
-```python
-class BaseAdapter(ABC):
-    """Abstract adapter for LLM providers."""
+---
 
+## Design Patterns
+
+### Base Classes
+All tools, flows, and adapters inherit from base classes in `app/core/base.py`:
+
+```python
+class BaseTool(ABC):
     @abstractmethod
-    async def complete(self, messages: List[Message]) -> str: ...
-```
+    async def execute(self, input_data: dict) -> dict:
+        pass
 
-### 3. Template Method Pattern (Flows)
-```python
 class BaseFlow(ABC):
-    """Abstract base class for flows."""
-
     @abstractmethod
-    async def run(self, input_data: Dict) -> Dict: ...
+    async def run(self, input_data: dict) -> dict:
+        pass
 
-    async def execute(self, run_id: str) -> None:
-        """Template method with common flow logic."""
-        # 1. Validate
-        # 2. Run
-        # 3. Handle errors
+class BaseAdapter(ABC):
+    @abstractmethod
+    async def generate_completion(self, prompt: str) -> str:
+        pass
 ```
 
-### 4. Registry Pattern (Tools)
+### Exception Hierarchy
+All exceptions inherit from `AIAgencyError`:
+
 ```python
-class ToolRegistry:
-    """Singleton registry for tool instances."""
-    _tools: Dict[str, BaseTool] = {}
-
-    @classmethod
-    def register(cls, name: str, tool: BaseTool): ...
-
-    @classmethod
-    def get(cls, name: str) -> BaseTool: ...
+AIAgencyError
+├── DatabaseError
+├── LLMError
+├── FlowError
+├── ToolError
+├── ValidationError
+├── AuthError
+└── StorageError
 ```
 
-### 5. Decorator Pattern (Cross-Cutting Concerns)
-```python
-@retry(max_attempts=3, backoff_type="exponential")
-@timeout(seconds=30)
-@log_execution(level="INFO")
-@measure_time
-async def call_llm(prompt: str) -> str:
-    """All decorators compose cleanly."""
-    ...
-```
+### Async First
+Everything uses async/await:
+- FastAPI endpoints
+- Database operations (SQLModel async)
+- LLM API calls (future)
+- All business logic
 
 ---
 
-## Security Architecture
+## API Endpoints
 
-### Authentication & Authorization
-```mermaid
-graph LR
-    CLIENT[Client Request] --> API_KEY[API Key Validation]
-    API_KEY --> TENANT[Tenant Resolution]
-    TENANT --> AUTHZ[Authorization Check]
-    AUTHZ --> ENDPOINT[Protected Endpoint]
+### Current (Wave 1)
+
+**POST /runs**
+Create a flow execution (stub implementation)
+```json
+{
+  "tenant_id": "my-company",
+  "flow_name": "maturity_assessment",
+  "input_data": {}
+}
 ```
+Returns: `{"run_id": "...", "status": "queued"}`
 
-### Tenant Isolation
-- All queries filtered by `tenant_id`
-- Row-level security in database
-- No cross-tenant data access
+**GET /runs/{run_id}**
+Get execution status (stub)
+Returns: `{"run_id": "...", "status": "completed", "output_data": {...}}`
 
-### Secrets Management
-- Environment variables for development
-- Secret Manager for production
-- No hardcoded credentials
-- Sensitive data redacted in logs
+**GET /health**
+Health check
+Returns: `{"status": "ok", "service": "ai-agency"}`
+
+**GET /docs**
+Interactive API documentation (Swagger UI)
+
+### Future (Wave 2+)
+
+These will be implemented with actual logic:
+- POST /api/v1/assessments - Maturity assessment flow
+- GET /api/v1/assessments/{run_id} - Get assessment results
+- POST /api/v1/use-cases/groom - Use case grooming flow
+- GET /api/v1/use-cases/{run_id} - Get grooming results
+- POST /api/v1/documents - Upload documents for RAG
+- GET /api/v1/documents/{doc_id} - Retrieve document
 
 ---
 
-## Performance Considerations
+## Environment Configuration
 
-### Database Optimization
-- **Composite Indexes**: `(status, created_at)` for efficient polling
-- **Vector Index**: IVFFlat for fast similarity search
-- **Connection Pooling**: SQLAlchemy async pool
-- **Query Optimization**: Eager loading, select specific columns
+### Local (.env)
+```bash
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+LOG_LEVEL=INFO
+ENVIRONMENT=development
+```
 
-### Caching Strategy
-- **In-Memory Cache**: `@cache_result` decorator (MVP)
-- **Future**: Redis for distributed caching
-- **Embedding Cache**: Avoid re-embedding same content
+### GitHub Actions (Secrets)
+- `GCP_SA_KEY` - Service account JSON
+- `GCP_PROJECT_ID` - merlin-notebook-lm
 
-### Async Operations
-- All I/O operations are async (DB, HTTP, file operations)
-- Proper use of `asyncio.gather()` for parallel operations
-- Non-blocking LLM calls
+### GCP Production (Secret Manager)
+- `OPENAI_API_KEY` - OpenAI API key
+- `DATABASE_PASSWORD` - If needed
+- `VERTEX_AI_CREDENTIALS` - For Vertex AI (future)
 
 ---
 
-## Monitoring & Observability
+## Deployment Flow
 
-### Structured Logging
-```python
-import structlog
-
-logger = structlog.get_logger()
-logger.info(
-    "flow_execution_complete",
-    run_id=run_id,
-    flow_name=flow_name,
-    duration_ms=duration,
-    status="completed"
-)
+```
+1. Developer pushes to main
+2. GitHub Actions runs:
+   ├── Tests (pytest, coverage)
+   ├── Linting (ruff)
+   ├── Type checking (mypy)
+   └── Build Docker image
+3. Push image to Artifact Registry
+4. Run database migrations (Alembic via Cloud SQL Proxy)
+5. Deploy to Cloud Run
+6. Run smoke tests
+7. Service is live
 ```
 
-### Metrics to Track
-- Request latency (p50, p95, p99)
-- LLM token usage and costs
-- Database query performance
-- Error rates by endpoint
-- Queue depth (queued runs)
-- Flow execution duration
-
-### Health Checks
-```
-GET /healthz (Wave 1 - stub implementation)
-- Returns: {"status": "ok", "service": "ai-agency"}
-- Note: Currently returns 404 on Cloud Run (routing issue being investigated)
-- Workaround: Use GET /docs to verify service availability
-```
-
-**Wave 1 Known Issue:**
-The `/healthz` endpoint is defined in code but returns 404 when deployed to Cloud Run. The `/docs` endpoint works correctly and can be used for health checks until this is resolved in Wave 2.
+**Auto-scaling:**
+- Cloud Run scales from 0 to 100 instances
+- Cold start: ~2-3 seconds
+- Requests per instance: 80 concurrent
 
 ---
 
-## Development Workflow
+## Security
 
-```mermaid
-graph LR
-    DEV[Local Development] --> COMMIT[Git Commit]
-    COMMIT --> HOOKS[Pre-commit Hooks<br/>Ruff, mypy]
-    HOOKS --> PUSH[Git Push]
-    PUSH --> CI[GitHub Actions CI]
-    CI --> TESTS[Run Tests<br/>Coverage >= 70%]
-    TESTS --> LINT[Linting & Formatting]
-    LINT --> MIGRATIONS[Test Migrations]
-    MIGRATIONS --> DEPLOY[Deploy to Cloud Run]
-```
+### Current Implementation
+
+**Secrets:**
+- ✅ No secrets in code or .env.example
+- ✅ GCP Secret Manager in production
+- ✅ GitHub Secrets for CI/CD
+
+**Database:**
+- ✅ Cloud SQL with private IP
+- ✅ Connection via Cloud SQL Proxy
+- ✅ Automated backups
+
+**API:**
+- ❌ No authentication yet (Wave 5)
+- ❌ No rate limiting yet (Wave 5)
+- ⚠️  Public endpoint (for now)
+
+### Future (Wave 5)
+- API key authentication
+- Rate limiting per tenant
+- CORS configuration
+- Input validation (already have Pydantic)
 
 ---
 
-## Next Steps (Wave 2-6)
+## Monitoring
 
-### Wave 2: Core Services
-- [ ] Database repositories (CRUD operations)
-- [ ] Session management (async SQLAlchemy)
-- [ ] OpenAI adapter implementation
-- [ ] Vertex AI adapter implementation
-- [ ] GCS storage integration
+### Current
+- Cloud Run metrics (requests, latency, errors)
+- Cloud SQL metrics (connections, CPU, memory)
+- Cloud Logging (structured JSON logs)
 
-### Wave 3: RAG Implementation
-- [ ] Document ingestion pipeline
-- [ ] Chunking strategy
-- [ ] Embedding generation
-- [ ] Vector similarity search
-- [ ] Context retrieval
+### Future (Wave 5+)
+- Custom metrics for LLM usage
+- Cost tracking per tenant
+- Error alerting
+- Uptime monitoring
 
-### Wave 4: Business Logic
-- [ ] 5 core tools implementation
-- [ ] Maturity assessment flow
-- [ ] Use case grooming flow
-- [ ] Background worker for polling
+---
 
-### Wave 5: Quality & Security
-- [ ] Comprehensive test suite (80%+ coverage)
-- [ ] Security hardening
-- [ ] API documentation
-- [ ] Performance optimization
+## Known Limitations
 
-### Wave 6: Final Review
-- [ ] Code review by code-reviewer agent
-- [ ] Production deployment
-- [ ] Monitoring setup
-- [ ] Documentation finalization
+### Wave 1 Gaps
+- LLM adapters are stubs (no actual API calls)
+- RAG is not implemented (tables exist)
+- Flow orchestration is stub code
+- Test coverage is low (8%)
+- No authentication
+
+### Production Issues
+- `/healthz` endpoint returns 404 (use `/health` instead)
+- Cold starts can be slow with large dependencies
+
+### Technical Debt
+- Need to increase test coverage to 80%
+- Need to implement actual retry logic
+- Need to add request logging
+- Need to optimize Docker image size
+
+---
+
+## Next Steps (Wave 2)
+
+**Priority 1:**
+1. Implement OpenAI adapter with real API calls
+2. Add retry logic and error handling
+3. Write tests for adapters (80% coverage)
+
+**Priority 2:**
+4. Implement RAG ingestion with pgvector
+5. Implement semantic search retrieval
+6. Test pgvector performance
+
+**Priority 3:**
+7. Build the 5 core business logic tools
+8. Implement flow orchestration
+9. End-to-end integration tests
+
+See [wave2/](../wave2/) for detailed planning.
 
 ---
 
 ## References
 
-- [Deployment Guide](DEPLOYMENT.md) - Multi-cloud deployment instructions
-- [Coding Standards](CODING_STANDARDS.md) - Python best practices
-- [Wave 1 Review](WAVE1_REVIEW.md) - Foundation implementation review
-- [API Documentation](http://localhost:8080/docs) - OpenAPI/Swagger UI
-
----
-
-**Maintained by:** AI Consulting Agency Development Team
-**Questions?** See [README.md](../README.md) or contact the team.
+- [DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md) - How to build on this
+- [CODING_STANDARDS.md](CODING_STANDARDS.md) - Code style guide
+- [TESTING_GUIDE.md](../TESTING_GUIDE.md) - Testing reference
+- [wave1/README.md](../wave1%20-%20Foundation/README.md) - Wave 1 summary
