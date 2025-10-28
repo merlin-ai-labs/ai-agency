@@ -17,7 +17,7 @@ echo ""
 
 # Configuration
 PROJECT_ID="merlin-notebook-lm"
-REGION="us-central1"
+REGION="europe-west1"
 ARTIFACT_REPO="ai-agency"
 IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/app"
 

@@ -100,7 +100,7 @@ gcloud auth login
 gcloud config set project merlin-notebook-lm
 
 # 3. Configure Docker for Artifact Registry
-gcloud auth configure-docker us-central1-docker.pkg.dev
+gcloud auth configure-docker europe-west1-docker.pkg.dev
 
 # 4. Verify access
 gcloud projects describe merlin-notebook-lm
@@ -231,15 +231,15 @@ docker-compose down
 
 ```bash
 # 1. Build and push container
-docker build -t us-central1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest .
-docker push us-central1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest
+docker build -t europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest .
+docker push europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest
 
 # 2. Deploy to Cloud Run
-gcloud run services replace clouddeploy.yaml --region=us-central1
+gcloud run services replace clouddeploy.yaml --region=europe-west1
 
 # 3. Get the URL
 gcloud run services describe ai-agency \
-  --region=us-central1 \
+  --region=europe-west1 \
   --format='value(status.url)'
 ```
 
@@ -375,7 +375,7 @@ pip install -e .
 **Problem:** Can't push to Artifact Registry
 ```bash
 # Re-authenticate Docker
-gcloud auth configure-docker us-central1-docker.pkg.dev
+gcloud auth configure-docker europe-west1-docker.pkg.dev
 
 # Check your permissions
 gcloud projects get-iam-policy merlin-notebook-lm \

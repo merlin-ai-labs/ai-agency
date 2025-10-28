@@ -1,12 +1,12 @@
 # Cloud Run Deployment Configuration
-# Deploy with: gcloud run services replace clouddeploy.yaml
+# Deploy with: gcloud run services replace clouddeploy.yaml --region=europe-west1
 
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: ai-agency
   labels:
-    cloud.googleapis.com/location: us-central1
+    cloud.googleapis.com/location: europe-west1
 spec:
   template:
     metadata:
@@ -14,24 +14,30 @@ spec:
         autoscaling.knative.dev/minScale: '0'
         autoscaling.knative.dev/maxScale: '10'
         run.googleapis.com/startup-cpu-boost: 'true'
+        run.googleapis.com/cloudsql-instances: 'merlin-notebook-lm:europe-west1:ai-agency-db'
     spec:
       serviceAccountName: ai-agency-runner@merlin-notebook-lm.iam.gserviceaccount.com
       containerConcurrency: 80
       timeoutSeconds: 300
       containers:
-      - image: us-central1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest
+      - image: europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest
         ports:
         - name: http1
           containerPort: 8080
         env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: cloudsql-database-url
+              key: latest
         - name: GCP_PROJECT_ID
           value: "merlin-notebook-lm"
         - name: GCS_BUCKET
-          value: "merlin-ai-agency-artifacts"
+          value: "merlin-ai-agency-artifacts-eu"
         - name: LLM_PROVIDER
           value: "openai"
         - name: VERTEX_AI_LOCATION
-          value: "us-central1"
+          value: "europe-west1"
         - name: LOG_LEVEL
           value: "INFO"
         - name: ENVIRONMENT
@@ -40,7 +46,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: openai-api-key
-              key: latest
+              key: "1"
         resources:
           limits:
             cpu: '2'

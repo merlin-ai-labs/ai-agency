@@ -1,29 +1,26 @@
 name: Deploy to Cloud Run
 
-# This workflow is COMMENTED OUT for now - uncomment when ready to deploy
+# Automatic deployment enabled for pushes to main branch
 # Configure the required secrets in GitHub repository settings:
-# - GCP_PROJECT_ID: Your GCP project ID
-# - GCP_SA_KEY: Service account JSON key with Cloud Run permissions
-# - DATABASE_URL: PostgreSQL connection string for Cloud SQL
-# - OPENAI_API_KEY: OpenAI API key
+# - GCP_PROJECT_ID: merlin-notebook-lm
+# - GCP_SA_KEY: Service account JSON key for ai-agency-runner@merlin-notebook-lm.iam.gserviceaccount.com
+# Note: DATABASE_URL and OPENAI_API_KEY are stored in GCP Secret Manager, not GitHub secrets
 
 on:
-  # Uncomment to enable automatic deployment on push to main
-  # push:
-  #   branches: [main]
-  workflow_dispatch:  # Manual trigger only for now
+  push:
+    branches: [main]
+  workflow_dispatch:  # Also allow manual trigger
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: ai-agency
-  REGION: us-central1
-  IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/ai-agency
+  REGION: europe-west1
+  IMAGE_NAME: europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Uncomment when ready to deploy
-    if: false  # Set to true to enable deployment
+    if: true  # Deployment enabled
 
     steps:
       - name: Checkout code
@@ -37,8 +34,8 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev
 
       - name: Build Docker image
         run: |
@@ -52,45 +49,13 @@ jobs:
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:latest
 
-      - name: Run database migrations
+      - name: Update clouddeploy.yaml with new image tag
         run: |
-          # Run migrations as a Cloud Run job
-          gcloud run jobs create migration-${{ github.sha }} \
-            --image $IMAGE_NAME:${{ github.sha }} \
-            --region $REGION \
-            --set-env-vars DATABASE_URL=${{ secrets.DATABASE_URL }} \
-            --execute-now \
-            --wait || true
-
-          # Alternative: Use Cloud SQL Proxy for migrations
-          # curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
-          # chmod +x cloud-sql-proxy
-          # ./cloud-sql-proxy ${{ secrets.CLOUD_SQL_INSTANCE }} --port 5432 &
-          # sleep 5
-          # pip install alembic
-          # alembic upgrade head
+          sed -i "s|image: europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest|image: $IMAGE_NAME:${{ github.sha }}|g" clouddeploy.yaml
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy $SERVICE_NAME \
-            --image $IMAGE_NAME:${{ github.sha }} \
-            --region $REGION \
-            --platform managed \
-            --allow-unauthenticated \
-            --set-env-vars DATABASE_URL=${{ secrets.DATABASE_URL }} \
-            --set-env-vars GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
-            --set-env-vars GCS_BUCKET=${{ secrets.GCS_BUCKET }} \
-            --set-env-vars LLM_PROVIDER=openai \
-            --set-env-vars LOG_LEVEL=INFO \
-            --set-env-vars ENVIRONMENT=production \
-            --set-secrets OPENAI_API_KEY=openai-api-key:latest \
-            --min-instances 1 \
-            --max-instances 10 \
-            --memory 2Gi \
-            --cpu 2 \
-            --timeout 300 \
-            --concurrency 80 \
-            --port 8080
+          gcloud run services replace clouddeploy.yaml --region=$REGION
 
       - name: Get deployment URL
         run: |

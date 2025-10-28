@@ -17,8 +17,8 @@ echo ""
 
 # Configuration
 PROJECT_ID="merlin-notebook-lm"
-REGION="us-central1"
-BUCKET_NAME="merlin-ai-agency-artifacts"
+REGION="europe-west1"
+BUCKET_NAME="merlin-ai-agency-artifacts-eu"
 ARTIFACT_REPO="ai-agency"
 
 echo "Configuration:"

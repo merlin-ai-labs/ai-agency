@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -e .
 # Copy application code
 COPY app/ ./app/
 COPY scripts/ ./scripts/
+COPY alembic.ini ./
 
 # Expose port for Cloud Run (8080 is the default)
 ENV PORT=8080
