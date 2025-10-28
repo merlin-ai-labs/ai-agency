@@ -68,8 +68,8 @@ jobs:
           # Set DATABASE_URL for local connection through proxy
           export DATABASE_URL="postgresql+psycopg://postgres:${DB_PASSWORD}@localhost:5432/ai_agency"
 
-          # Install Python dependencies for migration
-          pip install alembic psycopg[binary] sqlalchemy
+          # Install project dependencies for migration (includes sqlmodel, etc.)
+          pip install -e .
 
           # Run migrations
           alembic upgrade head
