@@ -49,6 +49,37 @@ jobs:
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:latest
 
+      - name: Run database migrations
+        run: |
+          # Install Cloud SQL Proxy
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+
+          # Start Cloud SQL Proxy in background
+          ./cloud-sql-proxy merlin-notebook-lm:europe-west1:ai-agency-db --port 5432 &
+          PROXY_PID=$!
+
+          # Wait for proxy to be ready
+          sleep 5
+
+          # Get database password from secret
+          DB_PASSWORD=$(gcloud secrets versions access latest --secret=cloudsql-postgres-password)
+
+          # Set DATABASE_URL for local connection through proxy
+          export DATABASE_URL="postgresql+psycopg://postgres:${DB_PASSWORD}@localhost:5432/ai_agency"
+
+          # Install Python dependencies for migration
+          pip install alembic psycopg[binary] sqlalchemy
+
+          # Run migrations
+          alembic upgrade head
+
+          # Verify migration
+          alembic current
+
+          # Kill proxy
+          kill $PROXY_PID
+
       - name: Update clouddeploy.yaml with new image tag
         run: |
           sed -i "s|image: europe-west1-docker.pkg.dev/merlin-notebook-lm/ai-agency/app:latest|image: $IMAGE_NAME:${{ github.sha }}|g" clouddeploy.yaml

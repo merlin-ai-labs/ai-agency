@@ -60,8 +60,17 @@ def run_migrations_online() -> None:
     In this scenario we need to create an Engine
     and associate a connection with the context.
     """
+    configuration = config.get_section(config.config_ini_section, {})
+
+    # Force psycopg (psycopg3) driver instead of psycopg2
+    # Replace postgresql:// with postgresql+psycopg://
+    if configuration:
+        url = configuration.get("sqlalchemy.url", "")
+        if url and url.startswith("postgresql://"):
+            configuration["sqlalchemy.url"] = url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
