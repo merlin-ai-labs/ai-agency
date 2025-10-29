@@ -51,23 +51,42 @@ Multi-tenant conversational AI platform with multi-LLM support (OpenAI, Vertex A
 ```
 ConsultingAgency/
 ├── app/
-│   ├── adapters/         # LLM provider adapters (OpenAI, Vertex AI, Mistral)
-│   ├── flows/agents/     # Conversational agents (weather_agent = reference)
-│   ├── tools/            # Tools agents can use (weather, etc.)
-│   ├── db/               # Database models, repositories, migrations
-│   ├── core/             # Base classes, rate limiter, exceptions
-│   └── main.py           # FastAPI application
-├── tests/                # Test suite (60+ tests for LLM adapters)
-├── docs/                 # Documentation
-├── dev                   # Development CLI (replaces docker-compose)
-└── .claude/              # Claude Code agent configurations
+│   ├── adapters/              # LLM provider adapters (OpenAI, Vertex AI, Mistral)
+│   ├── core/                  # Base classes, rate limiter, exceptions
+│   ├── db/
+│   │   ├── models.py          # SQLModel database models
+│   │   ├── repositories/      # Repository pattern for data access
+│   │   └── migrations/        # Alembic database migrations
+│   ├── flows/
+│   │   ├── agents/            # Conversational agents (weather_agent = reference)
+│   │   ├── maturity_assessment/  # Business flow (stub)
+│   │   └── usecase_grooming/  # Business flow (stub)
+│   ├── rag/                   # RAG ingestion and retrieval (stub)
+│   ├── tools/
+│   │   ├── weather/           # Weather tool (fully implemented)
+│   │   ├── parse_docs/        # Business tools (stubs)
+│   │   ├── score_rubrics/
+│   │   ├── gen_recs/
+│   │   ├── rank_usecases/
+│   │   └── write_backlog/
+│   └── main.py                # FastAPI application entry point
+├── tests/                     # Test suite (60+ tests for LLM adapters)
+│   ├── test_adapters/         # LLM adapter tests
+│   ├── test_tools/            # Tool tests
+│   ├── test_db/               # Database tests
+│   └── integration/           # Integration tests
+├── alembic/                   # Alembic configuration
+├── docs/                      # Documentation
+├── scripts/archive/           # Archived Wave 1 scripts
+├── dev                        # Development CLI (replaces docker-compose)
+└── .claude/                   # Claude Code agent configurations
 ```
 
 ## Development Workflow
 
 ```bash
 # Setup (one time)
-./dev setup              # Install deps, run migrations
+./dev setup              # Install deps, run migrations (safe - preserves data)
 
 # Daily workflow
 ./dev db-proxy           # Start Cloud SQL Proxy (separate terminal)
@@ -78,6 +97,16 @@ ConsultingAgency/
 # See all commands
 ./dev help
 ```
+
+**⚠️ Important: Database Safety**
+
+`./dev setup` runs `alembic upgrade head` which:
+- ✅ Only applies **new** database migrations (schema changes)
+- ✅ **Preserves all existing data** - safe to run multiple times
+- ✅ Is idempotent - running it again won't break anything
+- ❌ Does NOT drop tables or delete data
+
+The command connects to the **production** Cloud SQL database via the proxy, so your data is always safe.
 
 ## Example: Weather Agent
 

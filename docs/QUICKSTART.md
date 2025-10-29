@@ -84,8 +84,10 @@ cd ai-agency
 This will:
 - ✅ Create Python virtual environment in `./venv`
 - ✅ Install all Python dependencies
-- ✅ Run database migrations
+- ✅ Run database migrations (applies schema changes only - **preserves all data**)
 - ✅ Create `.env` file from `.env.example`
+
+**⚠️ Database Safety**: The setup command runs `alembic upgrade head` which only applies new schema migrations. It does NOT drop tables or delete data. Safe to run multiple times.
 
 ## Step 6: Configure Environment Variables
 
