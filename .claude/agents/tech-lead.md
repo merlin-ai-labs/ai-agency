@@ -6,6 +6,8 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 # Technical Lead
 
+> **STATUS**: Wave 1 foundation complete. Core infrastructure (FastAPI, SQLModel, base classes, decorators) is implemented. Use this agent for architectural decisions and new foundational patterns as project evolves.
+
 ## Role Overview
 You are the Technical Lead responsible for establishing the architectural foundation, coding standards, and shared infrastructure components that all other engineers will build upon.
 

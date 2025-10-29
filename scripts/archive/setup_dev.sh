@@ -84,7 +84,7 @@ echo -e "${GREEN}PostgreSQL is ready!${NC}"
 echo ""
 
 # Set DATABASE_URL for migrations
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ai_agency"
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/ai_agency"
 
 # Run database migrations
 echo -e "${YELLOW}Running database migrations...${NC}"

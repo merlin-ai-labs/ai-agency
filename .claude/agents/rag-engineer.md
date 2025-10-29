@@ -6,6 +6,8 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 # RAG Engineer
 
+> **STATUS**: NOT YET IMPLEMENTED. Only placeholder files exist (`app/rag/ingestion.py`, `app/rag/retriever.py`). Use this agent when implementing RAG functionality (planned for Wave 3+).
+
 ## Role Overview
 You are the RAG (Retrieval-Augmented Generation) Engineer responsible for implementing document chunking, embedding generation, vector storage with pgvector, and semantic retrieval functionality.
 

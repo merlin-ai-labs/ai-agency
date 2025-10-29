@@ -1,0 +1,324 @@
+#!/bin/bash
+# AI Agency Platform - Development CLI
+# Usage: ./dev <command>
+
+set -e
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# GCP Configuration
+GCP_PROJECT="merlin-notebook-lm"
+GCP_REGION="europe-west1"
+GCP_INSTANCE="ai-agency-db"
+CLOUD_SQL_PORT=5433
+
+# Helper Functions
+check_cloud_sql_proxy() {
+    echo -e "${YELLOW}Checking Cloud SQL Proxy...${NC}"
+
+    if ! command -v cloud-sql-proxy &> /dev/null; then
+        echo -e "${RED}Error: Cloud SQL Proxy not installed${NC}"
+        echo ""
+        echo "Install it with:"
+        echo "  brew install cloud-sql-proxy"
+        echo ""
+        echo "Or download from:"
+        echo "  https://cloud.google.com/sql/docs/postgres/sql-proxy"
+        exit 1
+    fi
+
+    if ! lsof -ti:$CLOUD_SQL_PORT > /dev/null 2>&1; then
+        echo -e "${RED}Error: Cloud SQL Proxy not running on port $CLOUD_SQL_PORT${NC}"
+        echo ""
+        echo "Start Cloud SQL Proxy in a separate terminal:"
+        echo "  cloud-sql-proxy $GCP_PROJECT:$GCP_REGION:$GCP_INSTANCE --port $CLOUD_SQL_PORT"
+        echo ""
+        echo "Get database password:"
+        echo "  gcloud secrets versions access latest --secret='cloud-sql-password'"
+        echo ""
+        echo "Then update DATABASE_URL in your .env file"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Cloud SQL Proxy running on port $CLOUD_SQL_PORT${NC}"
+}
+
+get_database_url() {
+    # Try to get from .env file first
+    if [ -f ".env" ]; then
+        DB_URL=$(grep "^DATABASE_URL=" .env | cut -d '=' -f2-)
+        if [ -n "$DB_URL" ]; then
+            echo "$DB_URL"
+            return
+        fi
+    fi
+
+    # Fallback to prompt
+    echo -e "${YELLOW}DATABASE_URL not found in .env${NC}"
+    echo "Get your database password:"
+    echo "  gcloud secrets versions access latest --secret='cloud-sql-password'"
+    echo ""
+    read -p "Enter database password: " -s db_pass
+    echo ""
+    echo "postgresql+psycopg://postgres:${db_pass}@localhost:$CLOUD_SQL_PORT/ai_agency"
+}
+
+# Commands
+show_help() {
+    echo -e "${BLUE}AI Agency Platform - Development CLI${NC}"
+    echo ""
+    echo "Usage: ./dev <command>"
+    echo ""
+    echo "Commands:"
+    echo "  ${GREEN}setup${NC}        - Initial development environment setup"
+    echo "  ${GREEN}db-check${NC}     - Check Cloud SQL Proxy status"
+    echo "  ${GREEN}db-migrate${NC}   - Run database migrations"
+    echo "  ${GREEN}db-seed${NC}      - Seed database with test data"
+    echo "  ${GREEN}server${NC}       - Start development server"
+    echo "  ${GREEN}test${NC}         - Run all tests"
+    echo "  ${GREEN}test-fast${NC}    - Run tests without coverage"
+    echo "  ${GREEN}lint${NC}         - Run code linting"
+    echo "  ${GREEN}format${NC}       - Format code with ruff"
+    echo "  ${GREEN}quality${NC}      - Run all quality checks (lint, format, type check)"
+    echo "  ${GREEN}clean${NC}        - Clean generated files (.pyc, __pycache__, etc.)"
+    echo ""
+    echo "Prerequisites:"
+    echo "  - Cloud SQL Proxy must be running"
+    echo "  - Start it with: cloud-sql-proxy $GCP_PROJECT:$GCP_REGION:$GCP_INSTANCE --port $CLOUD_SQL_PORT"
+    echo ""
+    echo "Examples:"
+    echo "  ./dev setup          # First-time setup"
+    echo "  ./dev server         # Start dev server"
+    echo "  ./dev test           # Run tests"
+    echo "  ./dev db-check       # Verify Cloud SQL Proxy"
+}
+
+setup() {
+    echo -e "${BLUE}=========================================="
+    echo "Setting up development environment"
+    echo "==========================================${NC}"
+
+    # Check Python version
+    echo -e "${YELLOW}Checking Python version...${NC}"
+    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    REQUIRED_VERSION="3.11"
+
+    if [[ "$PYTHON_VERSION" < "$REQUIRED_VERSION" ]]; then
+        echo -e "${RED}Error: Python $REQUIRED_VERSION or higher is required. Found: $PYTHON_VERSION${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Python version OK: $PYTHON_VERSION${NC}"
+
+    # Create virtual environment
+    if [ ! -d "venv" ]; then
+        echo -e "${YELLOW}Creating virtual environment...${NC}"
+        python3 -m venv venv
+        echo -e "${GREEN}✓ Virtual environment created${NC}"
+    else
+        echo -e "${GREEN}✓ Virtual environment exists${NC}"
+    fi
+
+    # Activate and install dependencies
+    echo -e "${YELLOW}Installing dependencies...${NC}"
+    source venv/bin/activate
+    pip install --upgrade pip --quiet
+    pip install -e ".[dev]" --quiet
+    echo -e "${GREEN}✓ Dependencies installed${NC}"
+
+    # Check Cloud SQL Proxy
+    check_cloud_sql_proxy
+
+    # Create .env
+    if [ ! -f ".env" ]; then
+        echo -e "${YELLOW}Creating .env file...${NC}"
+        cp .env.example .env
+        echo -e "${YELLOW}⚠ Please update .env with:${NC}"
+        echo "  1. DATABASE_URL (with your Cloud SQL password)"
+        echo "  2. OPENAI_API_KEY"
+        echo "  3. Other API keys as needed"
+    else
+        echo -e "${GREEN}✓ .env file exists${NC}"
+    fi
+
+    # Run migrations
+    echo -e "${YELLOW}Running migrations...${NC}"
+    export DATABASE_URL=$(get_database_url)
+    alembic upgrade head
+    echo -e "${GREEN}✓ Migrations applied${NC}"
+
+    echo ""
+    echo -e "${GREEN}=========================================="
+    echo "✓ Setup complete!"
+    echo "==========================================${NC}"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Ensure Cloud SQL Proxy is running in a separate terminal"
+    echo "  2. Update .env with your API keys and DATABASE_URL"
+    echo "  3. Run: ./dev server"
+    echo ""
+    echo "Cloud SQL Proxy command:"
+    echo "  cloud-sql-proxy $GCP_PROJECT:$GCP_REGION:$GCP_INSTANCE --port $CLOUD_SQL_PORT"
+}
+
+db_check() {
+    check_cloud_sql_proxy
+    echo ""
+    echo -e "${GREEN}Cloud SQL Proxy is running correctly!${NC}"
+    echo ""
+    echo "Connection details:"
+    echo "  Project: $GCP_PROJECT"
+    echo "  Region: $GCP_REGION"
+    echo "  Instance: $GCP_INSTANCE"
+    echo "  Local port: $CLOUD_SQL_PORT"
+}
+
+db_migrate() {
+    check_cloud_sql_proxy
+    echo -e "${YELLOW}Running database migrations...${NC}"
+    export DATABASE_URL=$(get_database_url)
+    alembic upgrade head
+    echo -e "${GREEN}✓ Migrations applied${NC}"
+}
+
+db_seed() {
+    check_cloud_sql_proxy
+    echo -e "${YELLOW}Seeding database...${NC}"
+    export DATABASE_URL=$(get_database_url)
+    python scripts/seed.py
+    echo -e "${GREEN}✓ Database seeded${NC}"
+}
+
+server() {
+    check_cloud_sql_proxy
+
+    echo -e "${YELLOW}Starting development server...${NC}"
+    echo -e "${BLUE}Server will start on http://localhost:8000${NC}"
+    echo -e "${BLUE}API docs: http://localhost:8000/docs${NC}"
+    echo ""
+
+    # Check if venv exists
+    if [ ! -d "venv" ]; then
+        echo -e "${RED}Error: Virtual environment not found${NC}"
+        echo "Run: ./dev setup"
+        exit 1
+    fi
+
+    # Check if .env exists
+    if [ ! -f ".env" ]; then
+        echo -e "${RED}Error: .env file not found${NC}"
+        echo "Run: ./dev setup"
+        exit 1
+    fi
+
+    # Load .env
+    export $(grep -v '^#' .env | xargs)
+
+    # Override DATABASE_URL if not set
+    if [ -z "$DATABASE_URL" ]; then
+        export DATABASE_URL=$(get_database_url)
+    fi
+
+    ./venv/bin/uvicorn app.main:app --reload --port 8000
+}
+
+test() {
+    echo -e "${YELLOW}Running tests with coverage...${NC}"
+    ./venv/bin/pytest -v --cov=app --cov-report=term-missing
+}
+
+test_fast() {
+    echo -e "${YELLOW}Running tests (fast mode)...${NC}"
+    ./venv/bin/pytest -v
+}
+
+lint() {
+    echo -e "${YELLOW}Running linter...${NC}"
+    ./venv/bin/ruff check app tests
+    echo -e "${GREEN}✓ Linting complete${NC}"
+}
+
+format_code() {
+    echo -e "${YELLOW}Formatting code...${NC}"
+    ./venv/bin/ruff format app tests
+    echo -e "${GREEN}✓ Formatting complete${NC}"
+}
+
+quality() {
+    echo -e "${BLUE}Running all quality checks...${NC}"
+    echo ""
+
+    echo -e "${YELLOW}1/3 Linting...${NC}"
+    ruff check app tests
+
+    echo ""
+    echo -e "${YELLOW}2/3 Formatting...${NC}"
+    ruff format app tests --check
+
+    echo ""
+    echo -e "${YELLOW}3/3 Type checking...${NC}"
+    mypy app
+
+    echo ""
+    echo -e "${GREEN}✓ All quality checks passed${NC}"
+}
+
+clean() {
+    echo -e "${YELLOW}Cleaning generated files...${NC}"
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find . -type f -name "*.pyc" -delete 2>/dev/null || true
+    find . -type f -name "*.pyo" -delete 2>/dev/null || true
+    find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+    rm -rf .pytest_cache htmlcov .coverage coverage.xml .mypy_cache .ruff_cache 2>/dev/null || true
+    echo -e "${GREEN}✓ Cleanup complete${NC}"
+}
+
+# Main
+case "$1" in
+    setup)
+        setup
+        ;;
+    db-check)
+        db_check
+        ;;
+    db-migrate)
+        db_migrate
+        ;;
+    db-seed)
+        db_seed
+        ;;
+    server)
+        server
+        ;;
+    test)
+        test
+        ;;
+    test-fast)
+        test_fast
+        ;;
+    lint)
+        lint
+        ;;
+    format)
+        format_code
+        ;;
+    quality)
+        quality
+        ;;
+    clean)
+        clean
+        ;;
+    help|--help|-h|"")
+        show_help
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

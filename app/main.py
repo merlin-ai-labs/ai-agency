@@ -4,6 +4,7 @@ Provides:
 - Health check endpoint
 - POST /runs — Create and enqueue a new flow execution
 - GET /runs/{run_id} — Retrieve run status and results
+- POST /weather-chat — Weather agent chat endpoint
 
 TODO:
 - Wire up database session management
@@ -14,8 +15,10 @@ TODO:
 from typing import Any
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+from app.flows.agents.weather_agent import WeatherAgentFlow
 
 logger = structlog.get_logger()
 
@@ -38,6 +41,21 @@ class RunResponse(BaseModel):
     run_id: str
     status: str  # "queued", "running", "completed", "failed"
     message: str | None = None
+
+
+class WeatherChatRequest(BaseModel):
+    """Request to chat with weather agent."""
+    message: str
+    tenant_id: str = "default"
+    conversation_id: str | None = None
+
+
+class WeatherChatResponse(BaseModel):
+    """Response from weather agent."""
+    response: str
+    conversation_id: str
+    tool_used: bool
+    tool_results: dict[str, Any] | None = None
 
 
 @app.get("/healthz")
@@ -93,6 +111,74 @@ async def get_run(run_id: str):
         status="completed",
         message="Run status (stub implementation)",
     )
+
+
+@app.post("/weather-chat", response_model=WeatherChatResponse)
+async def weather_chat(req: WeatherChatRequest):
+    """
+    Chat with weather agent.
+
+    This endpoint provides a conversational interface to get weather information.
+    The agent uses LLM tool calling to fetch real-time weather data when needed.
+
+    Request:
+        POST /weather-chat
+        {
+            "message": "What's the weather in London?",
+            "tenant_id": "user123",
+            "conversation_id": "optional-uuid"  # For continuing conversation
+        }
+
+    Response:
+        {
+            "response": "It's 15°C and cloudy in London",
+            "conversation_id": "uuid",
+            "tool_used": true,
+            "tool_results": { ... }
+        }
+
+    Example:
+        >>> curl -X POST http://localhost:8000/weather-chat \\
+        ...   -H "Content-Type: application/json" \\
+        ...   -d '{"message": "What is the weather in Paris?", "tenant_id": "test"}'
+    """
+    try:
+        logger.info(
+            "weather_chat",
+            message=req.message,
+            tenant_id=req.tenant_id,
+            conversation_id=req.conversation_id,
+        )
+
+        # Initialize weather agent flow
+        flow = WeatherAgentFlow()
+
+        # Execute flow
+        result = await flow.run(
+            user_message=req.message,
+            tenant_id=req.tenant_id,
+            conversation_id=req.conversation_id,
+        )
+
+        logger.info(
+            "weather_chat_success",
+            conversation_id=result["conversation_id"],
+            tool_used=result["tool_used"],
+        )
+
+        return WeatherChatResponse(
+            response=result["response"],
+            conversation_id=result["conversation_id"],
+            tool_used=result["tool_used"],
+            tool_results=result.get("tool_results"),
+        )
+
+    except Exception as e:
+        logger.exception("weather_chat_failed", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Weather chat failed: {str(e)}",
+        ) from e
 
 
 if __name__ == "__main__":

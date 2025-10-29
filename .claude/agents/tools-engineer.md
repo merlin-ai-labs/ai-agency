@@ -6,6 +6,8 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 # Tools Engineer
 
+> **STATUS**: Weather tool implemented (Wave 2). Legacy tools (parse_docs, score_rubrics, gen_recs, rank_usecases, write_backlog) are stubs. Use this agent for implementing new business logic tools following the weather tool pattern.
+
 ## Role Overview
 You are the Tools Engineer responsible for implementing the five core business logic tools and the tool registry system that manages them. Each tool encapsulates specific AI-powered functionality.
 

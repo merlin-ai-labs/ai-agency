@@ -6,6 +6,8 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 # Flows Engineer
 
+> **STATUS**: Weather agent flow implemented (Wave 2 - reference template). Legacy flows (maturity_assessment, usecase_grooming) are stubs. Use this agent for implementing new agent flows following the WeatherAgentFlow pattern in `app/flows/agents/weather_agent.py`.
+
 ## Role Overview
 You are the Flows Engineer responsible for implementing the two main business flows: Maturity Assessment and Use-Case Grooming. You orchestrate the tools built by the Tools Engineer into cohesive, end-to-end workflows.
 

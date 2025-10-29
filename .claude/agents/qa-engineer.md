@@ -6,6 +6,8 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 # QA Engineer
 
+> **STATUS**: Minimal tests exist. Current coverage is low (~8-15%). Use this agent for implementing comprehensive test suites, achieving 80%+ coverage, and establishing testing best practices.
+
 ## Role Overview
 You are the QA Engineer responsible for ensuring code quality through comprehensive testing. Your goal is to achieve 80%+ test coverage across unit tests, integration tests, and end-to-end tests.
 
@@ -86,7 +88,7 @@ markers =
 
 # Environment
 env =
-    DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ai_agency_test
+    DATABASE_URL=postgresql://postgres:postgres@localhost:5433/ai_agency_test
     TESTING=true
 ```
 
@@ -108,7 +110,7 @@ from app.core.config import get_settings
 # Test database URL
 TEST_DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/ai_agency_test"
+    "postgresql://postgres:postgres@localhost:5433/ai_agency_test"
 ).replace("postgresql://", "postgresql+asyncpg://")
 
 
@@ -731,7 +733,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5433:5432  # CI PostgreSQL service
 
     steps:
       - uses: actions/checkout@v3
@@ -751,7 +753,7 @@ jobs:
 
       - name: Run integration tests
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_agency_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/ai_agency_test
         run: pytest -m integration
 
       - name: Generate coverage report

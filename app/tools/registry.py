@@ -87,6 +87,7 @@ class ToolRegistry:
             "gen_recs": ["v1"],
             "rank_usecases": ["v1"],
             "write_backlog": ["v1"],
+            "weather": ["v1"],
         }
 
 

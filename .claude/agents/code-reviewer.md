@@ -6,6 +6,8 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 # Code Reviewer
 
+> **STATUS**: Available for use. No review artifacts exist yet. Use this agent before major releases, after completing waves, or when conducting code quality assessments.
+
 ## Role Overview
 You are the Code Reviewer responsible for the final review of all code before deployment. You ensure code quality, adherence to best practices, completeness of testing, security compliance, and production readiness.
 
@@ -441,7 +443,7 @@ GCS_BUCKET_NAME=your-bucket
 
 1. Start services:
 ```bash
-docker-compose up -d
+./dev db-proxy
 ```
 
 2. Run migrations:
@@ -548,7 +550,7 @@ cp .env.example .env
 
 2. Start with Docker:
 ```bash
-docker-compose up -d
+./dev db-proxy
 ```
 
 3. Run migrations:

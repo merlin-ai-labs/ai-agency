@@ -26,7 +26,7 @@ if [ -z "$DATABASE_URL" ]; then
         echo "Please set DATABASE_URL environment variable or add it to .env file"
         echo ""
         echo "Examples:"
-        echo "  export DATABASE_URL=postgresql://user:pass@localhost:5432/ai_agency"
+        echo "  export DATABASE_URL=postgresql://user:pass@localhost:5433/ai_agency"
         echo "  export DATABASE_URL=postgresql://user:pass@/cloudsql/project:region:instance/db"
         exit 1
     fi

@@ -23,6 +23,16 @@ class RunStatus(str, Enum):
     FAILED = "failed"
 
 
+class FlowType(str, Enum):
+    """Supported agent flow types."""
+
+    WEATHER = "weather"
+    GITHUB = "github"
+    SLACK = "slack"
+    MATURITY_ASSESSMENT = "maturity_assessment"
+    USECASE_GROOMING = "usecase_grooming"
+
+
 class Run(SQLModel, table=True):
     """
     Flow execution run.
@@ -107,6 +117,84 @@ class Tenant(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WeatherApiCall(SQLModel, table=True):
+    """Store weather API call history for auditing and caching.
+
+    Records every call to the OpenWeatherMap API including request parameters,
+    response data, and performance metrics.
+
+    TODO:
+    - Add indexes on (tenant_id, location, created_at) for efficient caching lookups
+    - Add indexes on (success, created_at) for error tracking
+    """
+
+    __tablename__ = "weather_api_calls"
+
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: str = Field(index=True)
+
+    # Request parameters
+    location: str = Field(index=True)  # City name or coordinates
+    units: str = "metric"  # metric, imperial, standard
+
+    # Response data
+    temperature: float | None = None
+    feels_like: float | None = None
+    weather_condition: str | None = None  # e.g., "Clear", "Clouds"
+    weather_description: str | None = None  # e.g., "clear sky"
+    humidity: int | None = None
+    wind_speed: float | None = None
+
+    # Full API response stored as JSON
+    response_data: dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+
+    # Call metadata
+    success: bool = Field(default=True, index=True)
+    error_message: str | None = None
+    api_call_ms: int | None = None  # API latency in milliseconds
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class Conversation(SQLModel, table=True):
+    """Conversation for agent chat history.
+
+    Stores conversation metadata for multi-turn agent interactions.
+    Each conversation can have multiple messages.
+    """
+
+    __tablename__ = "conversations"
+
+    id: int | None = Field(default=None, primary_key=True)
+    conversation_id: str = Field(unique=True, index=True)  # UUID
+    tenant_id: str = Field(index=True)
+    flow_type: str = Field(index=True)  # e.g., "weather", "github", "slack"
+    flow_metadata: dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Message(SQLModel, table=True):
+    """Message in a conversation.
+
+    Stores individual messages in a conversation, including user messages,
+    assistant responses, and tool calls/results.
+    """
+
+    __tablename__ = "messages"
+
+    id: int | None = Field(default=None, primary_key=True)
+    conversation_id: str = Field(index=True)
+    tenant_id: str = Field(index=True)
+    flow_type: str = Field(index=True)  # Denormalized for fast queries
+    role: str  # 'user', 'assistant', 'system', 'tool'
+    content: str
+    tool_calls: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    message_metadata: dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 # TODO: Add more models as needed:

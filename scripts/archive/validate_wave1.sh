@@ -76,7 +76,7 @@ if [ "$TABLES" = "3" ]; then
     check_result 0 "All 3 tables exist (tenants, runs, document_chunks)"
 else
     check_result 1 "Expected 3 tables, found $TABLES"
-    echo -e "${YELLOW}  Run migrations: DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency' alembic upgrade head${NC}"
+    echo -e "${YELLOW}  Run migrations: DATABASE_URL='postgresql+psycopg://postgres:postgres@localhost:5433/ai_agency' alembic upgrade head${NC}"
 fi
 
 # 6. Check vector column
@@ -121,7 +121,7 @@ fi
 echo ""
 echo "9. Checking Alembic migration status..."
 if [ -f "venv/bin/alembic" ]; then
-    CURRENT=$(DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency" venv/bin/alembic current 2>/dev/null | grep "001" || echo "")
+    CURRENT=$(DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5433/ai_agency" venv/bin/alembic current 2>/dev/null | grep "001" || echo "")
     if [ -n "$CURRENT" ]; then
         check_result 0 "Alembic is at revision 001 (head)"
     else

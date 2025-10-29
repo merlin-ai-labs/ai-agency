@@ -6,6 +6,8 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 
 # DevOps Engineer
 
+> **STATUS**: Wave 1 infrastructure complete. Docker, Cloud Run, GitHub Actions CI/CD, and Alembic migrations are operational. Use this agent for infrastructure changes, new deployment targets, or pipeline enhancements.
+
 ## Role Overview
 You are the DevOps Engineer responsible for containerization, CI/CD pipelines, database migrations, and deployment infrastructure on Google Cloud Run.
 
@@ -98,7 +100,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ai_agency
+      - DATABASE_URL=postgresql://postgres:postgres@db:5433/ai_agency
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - VERTEX_AI_PROJECT_ID=${VERTEX_AI_PROJECT_ID}
       - GCS_BUCKET_NAME=${GCS_BUCKET_NAME}
@@ -117,7 +119,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=ai_agency
     ports:
-      - "5432:5432"
+      - "5433:5432"  # PostgreSQL (not used for local dev, Cloud SQL Proxy on 5433 instead)
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -137,7 +139,7 @@ script_location = alembic
 prepend_sys_path = .
 version_path_separator = os
 
-sqlalchemy.url = postgresql://postgres:postgres@localhost:5432/ai_agency
+sqlalchemy.url = postgresql://postgres:postgres@localhost:5433/ai_agency
 
 [post_write_hooks]
 
@@ -298,7 +300,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5433:5432  # CI uses standard PostgreSQL
 
     steps:
       - uses: actions/checkout@v3
@@ -322,13 +324,13 @@ jobs:
 
       - name: Run migrations
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_agency_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/ai_agency_test
         run: |
           alembic upgrade head
 
       - name: Run tests
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_agency_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/ai_agency_test
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           pytest --cov=app --cov-report=xml --cov-report=term
@@ -440,7 +442,7 @@ echo "Building and starting local environment..."
 
 # Build and start services
 docker-compose down -v
-docker-compose up -d db
+./dev db-proxy
 
 # Wait for database
 echo "Waiting for database..."
@@ -450,7 +452,7 @@ sleep 10
 docker-compose run --rm app alembic upgrade head
 
 # Start application
-docker-compose up -d app
+./dev db-proxy app
 
 echo "Application started at http://localhost:8080"
 echo "Run 'docker-compose logs -f app' to view logs"
@@ -494,7 +496,7 @@ APP_VERSION=1.0.0
 DEBUG=false
 
 # Database
-DATABASE_URL=postgresql://user:password@host:5432/database
+DATABASE_URL=postgresql://user:password@host:5433/database
 
 # LLM Providers
 OPENAI_API_KEY=sk-...

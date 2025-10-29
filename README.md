@@ -5,28 +5,25 @@ AI-powered consulting platform for maturity assessments and use case grooming wi
 ## Quick Start
 
 ```bash
-# 1. Clone and setup
+# 1. Clone repository
 git clone <repo-url>
 cd ConsultingAgency
-python -m venv venv
-source venv/bin/activate
-pip install -e ".[dev]"
 
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your OPENAI_API_KEY
+# 2. Start Cloud SQL Proxy (in a separate terminal)
+cloud-sql-proxy merlin-notebook-lm:europe-west1:ai-agency-db --port 5433
 
-# 3. Start database
-docker-compose up -d db
+# 3. One-command setup
+./dev setup
 
-# 4. Run migrations
-./scripts/run_migrations.sh
+# 4. Update .env with your Cloud SQL password and API keys
 
-# 5. Start API
-uvicorn app.main:app --reload --port 8080
+# 5. Start server
+./dev server
 ```
 
-Visit http://localhost:8080/docs for the interactive API documentation.
+Visit http://localhost:8000/docs for the interactive API documentation.
+
+See all available commands: `./dev help`
 
 **For detailed setup and development workflow, see [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)**
 
@@ -42,11 +39,11 @@ Visit http://localhost:8080/docs for the interactive API documentation.
 ## Tech Stack
 
 - **Backend**: FastAPI + Python 3.11+
-- **Database**: PostgreSQL 15 + pgvector
+- **Database**: PostgreSQL 15 + pgvector (Cloud SQL)
 - **LLM Providers**: OpenAI, Google Vertex AI
 - **Storage**: Google Cloud Storage
 - **Testing**: pytest (current: 8% coverage, target: 80%)
-- **Deployment**: Docker + Google Cloud Run
+- **Deployment**: Google Cloud Run (containerized)
 - **CI/CD**: GitHub Actions (auto-deploy on push to main)
 
 ## Production Deployment
@@ -74,7 +71,7 @@ ConsultingAgency/
 ├── scripts/              # Setup and utility scripts
 ├── docs/                 # Documentation
 ├── alembic/              # Database migrations
-└── docker-compose.yml    # Local development services
+└── dev                   # Development CLI tool
 ```
 
 ## Development
@@ -105,17 +102,13 @@ alembic upgrade head
 
 ## Documentation
 
+### Getting Started
+- **[QUICKSTART.md](docs/QUICKSTART.md)** - 5-minute setup guide
+
+### Development
 - **[DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Complete development guide
-- **[TESTING_GUIDE.md](docs/TESTING_GUIDE.md)** - Testing reference
-
-**Project Documentation:**
-- [ARCHITECTURE.md](docs/project/ARCHITECTURE.md) - Technical architecture
-- [CODING_STANDARDS.md](docs/project/CODING_STANDARDS.md) - Code style guidelines
-- [CHANGELOG.md](docs/project/CHANGELOG.md) - Version history
-
-**Wave Documentation:**
-- [Wave 1 artifacts](docs/wave1/) - Foundation and deployment
-- [Wave 2 planning](docs/wave2/) - Current development phase
+- **[CODING_STANDARDS.md](docs/CODING_STANDARDS.md)** - Best practices, decorators, patterns (READ THIS FIRST!)
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical architecture and design decisions
 
 ## API Endpoints
 
@@ -145,8 +138,8 @@ curl -X POST http://localhost:8080/runs \
 Required environment variables:
 
 ```bash
-# Database
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/ai_agency
+# Database (requires Cloud SQL Proxy on port 5433)
+DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5433/ai_agency
 
 # LLM Provider
 LLM_PROVIDER=openai  # or "vertex"
@@ -181,15 +174,15 @@ Auto-deploys on push to main:
 ## Contributing
 
 1. Create a feature branch
-2. Follow [coding standards](docs/project/CODING_STANDARDS.md)
+2. Read [CODING_STANDARDS.md](docs/CODING_STANDARDS.md) for patterns and best practices
 3. Write tests (maintain 80%+ coverage target)
 4. Run quality checks: `ruff check && ruff format && mypy app && pytest`
 5. Submit a pull request
 
 ## Development Phases
 
-- **Wave 1** ✅ - Foundation (completed, deployed) - See [docs/wave1/](docs/wave1/)
-- **Wave 2** 🚧 - Core Services (in progress)
+- **Wave 1** ✅ - Foundation (completed, deployed)
+- **Wave 2** 🚧 - Core Services & Multi-LLM (in progress)
 - **Wave 3** ⏳ - RAG Implementation
 - **Wave 4** ⏳ - Business Logic
 - **Wave 5** ⏳ - Quality & Security
@@ -197,7 +190,8 @@ Auto-deploys on push to main:
 
 ## Support
 
-- Check [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for common tasks
-- Review existing code for examples
-- See [docs/wave1/WAVE1_COMPLETE.md](docs/wave1/WAVE1_COMPLETE.md) for Wave 1 context
+- Start with [QUICKSTART.md](docs/QUICKSTART.md) for setup
+- Read [CODING_STANDARDS.md](docs/CODING_STANDARDS.md) before coding
+- Check [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for common tasks
+- Review [ARCHITECTURE.md](docs/ARCHITECTURE.md) for technical decisions
 - Open an issue for bugs or feature requests

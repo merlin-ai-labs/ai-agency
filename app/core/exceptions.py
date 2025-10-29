@@ -340,3 +340,36 @@ class ConfigurationError(AIAgencyError):
             original_error: The original configuration exception if any.
         """
         super().__init__(message, details, original_error)
+
+
+class WeatherError(AIAgencyError):
+    """Raised when weather API operations fail.
+
+    Use this for errors related to weather API calls including invalid
+    locations, API failures, timeouts, and data parsing errors.
+
+    Example:
+        >>> try:
+        ...     weather = await client.get_weather("InvalidCity")
+        ... except httpx.HTTPError as e:
+        ...     raise WeatherError(
+        ...         "Weather API call failed",
+        ...         details={"location": "InvalidCity", "status": 404},
+        ...         original_error=e
+        ...     ) from e
+    """
+
+    def __init__(
+        self,
+        message: str,
+        details: dict[str, Any] | None = None,
+        original_error: Exception | None = None,
+    ) -> None:
+        """Initialize WeatherError.
+
+        Args:
+            message: Description of the weather API error.
+            details: Context such as location, API endpoint, status code.
+            original_error: The original exception from the API call.
+        """
+        super().__init__(message, details, original_error)
