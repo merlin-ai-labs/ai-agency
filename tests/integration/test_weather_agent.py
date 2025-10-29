@@ -14,7 +14,7 @@ import sys
 # Add app to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from app.flows.weather_agent import WeatherAgentFlow
+from app.flows.agents.weather_agent import WeatherAgentFlow
 
 
 async def test_weather_agent():
