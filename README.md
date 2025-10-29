@@ -1,197 +1,193 @@
 # AI Consulting Agency Platform
 
-AI-powered consulting platform for maturity assessments and use case grooming with multi-LLM support and RAG capabilities.
+Multi-tenant conversational AI platform with multi-LLM support (OpenAI, Vertex AI, Mistral) and production-ready infrastructure on Google Cloud Run.
 
-## Quick Start
+## What This Platform Does
 
-```bash
-# 1. Clone repository
-git clone <repo-url>
-cd ConsultingAgency
+**Current Features (Wave 2 Complete):**
+- ✅ Multi-LLM conversational agents (reference: Weather Agent)
+- ✅ Multi-tenant conversation management with persistence
+- ✅ Rate limiting per tenant + LLM provider
+- ✅ Function calling / tool use support
+- ✅ Production deployment on Cloud Run with auto-scaling
 
-# 2. Start Cloud SQL Proxy (in a separate terminal)
-cloud-sql-proxy merlin-notebook-lm:europe-west1:ai-agency-db --port 5433
+**Coming Soon:**
+- 🚧 RAG with pgvector (Wave 3)
+- 🚧 Business logic flows (maturity assessment, use case grooming)
+- 🚧 Authentication & authorization
 
-# 3. One-command setup
-./dev setup
+## Quick Links
 
-# 4. Update .env with your Cloud SQL password and API keys
-
-# 5. Start server
-./dev server
-```
-
-Visit http://localhost:8000/docs for the interactive API documentation.
-
-See all available commands: `./dev help`
-
-**For detailed setup and development workflow, see [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)**
-
-## Features
-
-- 📊 AI Maturity Assessments with rubric-based scoring
-- 🎯 Use Case Grooming and prioritization
-- 🤖 Multi-LLM support (OpenAI, Vertex AI)
-- 🔍 RAG-powered document analysis with pgvector
-- 🔐 Secure multi-tenant architecture
-- ⚡ Fast async API with FastAPI
+- **[Get Started →](docs/QUICKSTART.md)** - Complete setup guide with GCP authentication
+- **[Development Guide →](docs/DEVELOPER_GUIDE.md)** - Build agents, flows, and tools
+- **[Coding Standards →](docs/CODING_STANDARDS.md)** - **READ THIS FIRST** before coding
+- **[Architecture →](docs/ARCHITECTURE.md)** - System design and technical decisions
+- **[Live API →](https://ai-agency-4ebxrg4hdq-ew.a.run.app/docs)** - Production environment (europe-west1)
 
 ## Tech Stack
 
-- **Backend**: FastAPI + Python 3.11+
-- **Database**: PostgreSQL 15 + pgvector (Cloud SQL)
-- **LLM Providers**: OpenAI, Google Vertex AI
-- **Storage**: Google Cloud Storage
-- **Testing**: pytest (current: 8% coverage, target: 80%)
-- **Deployment**: Google Cloud Run (containerized)
-- **CI/CD**: GitHub Actions (auto-deploy on push to main)
+**Backend:**
+- FastAPI (async) + Python 3.11+
+- PostgreSQL 15 + pgvector (Cloud SQL)
+- Alembic migrations
 
-## Production Deployment
+**LLM Providers:**
+- OpenAI (GPT-4.1, GPT-4.1-mini)
+- Google Vertex AI (Gemini 2.0 Flash)
+- Mistral (mistral-medium-latest)
 
-**Live Service**: https://ai-agency-4ebxrg4hdq-ew.a.run.app
+**Infrastructure:**
+- Google Cloud Run (containerized)
+- Cloud SQL (PostgreSQL with HA)
+- Cloud Storage (GCS)
+- GitHub Actions (CI/CD)
 
-- **Region**: europe-west1 (Belgium)
-- **Database**: Cloud SQL PostgreSQL 15
-- **Auto-deployment**: Enabled via GitHub Actions
+**Local Development:**
+- Cloud SQL Proxy (connects to production database)
+- `./dev` CLI tool (unified development commands)
 
 ## Project Structure
 
 ```
 ConsultingAgency/
 ├── app/
-│   ├── api/              # API endpoints
-│   ├── core/             # Base classes, exceptions, decorators
-│   ├── db/               # Database models and sessions
-│   ├── flows/            # Business workflows (maturity, grooming)
-│   ├── adapters/         # LLM provider adapters
-│   ├── rag/              # RAG ingestion and retrieval
-│   ├── tools/            # Business logic tools
+│   ├── adapters/         # LLM provider adapters (OpenAI, Vertex AI, Mistral)
+│   ├── flows/agents/     # Conversational agents (weather_agent = reference)
+│   ├── tools/            # Tools agents can use (weather, etc.)
+│   ├── db/               # Database models, repositories, migrations
+│   ├── core/             # Base classes, rate limiter, exceptions
 │   └── main.py           # FastAPI application
-├── tests/                # Test suite
-├── scripts/              # Setup and utility scripts
+├── tests/                # Test suite (60+ tests for LLM adapters)
 ├── docs/                 # Documentation
-├── alembic/              # Database migrations
-└── dev                   # Development CLI tool
+├── dev                   # Development CLI (replaces docker-compose)
+└── .claude/              # Claude Code agent configurations
 ```
 
-## Development
-
-### Running Tests
+## Development Workflow
 
 ```bash
-pytest -v --cov=app
+# Setup (one time)
+./dev setup              # Install deps, run migrations
+
+# Daily workflow
+./dev db-proxy           # Start Cloud SQL Proxy (separate terminal)
+./dev server             # Start API server (http://localhost:8000)
+./dev test               # Run tests
+./dev quality            # Lint + format + type check
+
+# See all commands
+./dev help
 ```
 
-### Code Quality
+## Example: Weather Agent
+
+The weather agent is the **reference implementation** for building agents:
 
 ```bash
-ruff check app tests --fix
-ruff format app tests
-mypy app
-```
-
-### Database Migrations
-
-```bash
-# Create migration
-alembic revision --autogenerate -m "description"
-
-# Apply migrations
-alembic upgrade head
-```
-
-## Documentation
-
-### Getting Started
-- **[QUICKSTART.md](docs/QUICKSTART.md)** - 5-minute setup guide
-
-### Development
-- **[DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Complete development guide
-- **[CODING_STANDARDS.md](docs/CODING_STANDARDS.md)** - Best practices, decorators, patterns (READ THIS FIRST!)
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Technical architecture and design decisions
-
-## API Endpoints
-
-### Core Endpoints
-- `POST /runs` - Create flow execution
-- `GET /runs/{run_id}` - Get run status
-- `GET /health` - Health check
-- `GET /docs` - Interactive API documentation
-
-### Use Cases
-- Maturity assessment flow: `flow_name: "maturity_assessment"`
-- Use case grooming flow: `flow_name: "usecase_grooming"`
-
-Example:
-```bash
-curl -X POST http://localhost:8080/runs \
+curl -X POST http://localhost:8000/weather/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "tenant_id": "my-company",
-    "flow_name": "maturity_assessment",
-    "input_data": {}
+    "message": "What is the weather in London?",
+    "tenant_id": "test-user"
   }'
 ```
 
-## Environment Configuration
+See `app/flows/agents/weather_agent.py` for implementation patterns.
 
-Required environment variables:
+## Key Patterns
 
-```bash
-# Database (requires Cloud SQL Proxy on port 5433)
-DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5433/ai_agency
-
-# LLM Provider
-LLM_PROVIDER=openai  # or "vertex"
-OPENAI_API_KEY=sk-...
-
-# Storage (for production)
-GCS_BUCKET=your-bucket-name
-
-# Optional
-LOG_LEVEL=INFO
-ENVIRONMENT=development
+**1. Multi-tenant by design:**
+```python
+# Every conversation belongs to a tenant
+conversation = await repo.create_conversation(
+    tenant_id="company-123",
+    flow_type="weather"
+)
 ```
 
-See `.env.example` for complete configuration.
+**2. Provider-agnostic LLM access:**
+```python
+# Works with OpenAI, Vertex AI, or Mistral
+llm = get_llm_adapter(provider="openai")
+response = await llm.generate(messages, tools=tools)
+```
 
-## CI/CD Pipeline
+**3. Repository pattern for data access:**
+```python
+# Never access database directly
+from app.db.repositories import ConversationRepository
+repo = ConversationRepository(session)
+await repo.create_conversation(tenant_id, flow_type)
+```
 
-### Testing (`ci.yml`)
-Runs on every PR and push:
-- Linting and formatting (Ruff)
-- Type checking (mypy)
-- Tests with coverage (pytest)
-- PostgreSQL + pgvector integration tests
+**4. Decorators for cross-cutting concerns:**
+```python
+from app.core.decorators import log_execution, timeout
 
-### Deployment (`deploy.yml`)
-Auto-deploys on push to main:
-- Build Docker image
-- Push to Artifact Registry
-- Deploy to Cloud Run
-- Run smoke tests
+@log_execution
+@timeout(30)
+async def my_flow():
+    pass
+```
 
-## Contributing
+See [CODING_STANDARDS.md](docs/CODING_STANDARDS.md) for complete patterns.
 
-1. Create a feature branch
-2. Read [CODING_STANDARDS.md](docs/CODING_STANDARDS.md) for patterns and best practices
-3. Write tests (maintain 80%+ coverage target)
-4. Run quality checks: `ruff check && ruff format && mypy app && pytest`
-5. Submit a pull request
+## Production Deployment
+
+**Live Service:** https://ai-agency-4ebxrg4hdq-ew.a.run.app
+
+**Auto-deploys on:** Push to `main` branch
+
+**CI/CD Pipeline:**
+1. Run tests (pytest with coverage)
+2. Lint + format (Ruff)
+3. Type check (mypy)
+4. Build Docker image
+5. Run database migrations
+6. Deploy to Cloud Run
+7. Smoke test (`/health` endpoint)
+
+**Monitoring:**
+- Cloud Run metrics (CPU, memory, requests)
+- Structured JSON logging
+- Cloud SQL connection pooling
+
+## Documentation Structure
+
+1. **[QUICKSTART.md](docs/QUICKSTART.md)** - Start here! Complete setup in 10 minutes
+2. **[CODING_STANDARDS.md](docs/CODING_STANDARDS.md)** - Read before writing code!
+3. **[DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Building agents, flows, and tools
+4. **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System design and decisions
 
 ## Development Phases
 
-- **Wave 1** ✅ - Foundation (completed, deployed)
-- **Wave 2** 🚧 - Core Services & Multi-LLM (in progress)
-- **Wave 3** ⏳ - RAG Implementation
-- **Wave 4** ⏳ - Business Logic
-- **Wave 5** ⏳ - Quality & Security
-- **Wave 6** ⏳ - Final Review
+| Wave | Focus | Status |
+|------|-------|--------|
+| Wave 1 | Foundation (FastAPI, Cloud Run, CI/CD) | ✅ Complete |
+| Wave 2 | Multi-LLM + Weather Agent | ✅ Complete |
+| Wave 3 | RAG with pgvector | ⏳ Next |
+| Wave 4 | Business flows (maturity, grooming) | ⏳ Planned |
+| Wave 5 | Auth + 80% test coverage | ⏳ Planned |
+
+## Contributing
+
+1. Read [CODING_STANDARDS.md](docs/CODING_STANDARDS.md) - **mandatory**
+2. Study the weather agent reference implementation
+3. Write tests (aim for 80% coverage)
+4. Run quality checks: `./dev quality`
+5. Submit PR
 
 ## Support
 
-- Start with [QUICKSTART.md](docs/QUICKSTART.md) for setup
-- Read [CODING_STANDARDS.md](docs/CODING_STANDARDS.md) before coding
-- Check [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for common tasks
-- Review [ARCHITECTURE.md](docs/ARCHITECTURE.md) for technical decisions
-- Open an issue for bugs or feature requests
+**Getting Started:**
+- Setup issues? → [QUICKSTART.md](docs/QUICKSTART.md)
+- Code questions? → [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
+- Architecture questions? → [ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+**Need Help?**
+- Open an issue on GitHub
+- Check existing issues first
+
+---
+
+**Current Status:** Production-ready conversational AI platform with multi-LLM support. Weather agent operational as reference implementation for building new agents.
