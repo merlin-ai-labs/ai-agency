@@ -9,12 +9,19 @@ import logging
 
 from openai import AsyncOpenAI, OpenAIError
 
+from typing import Any
+
 from app.config import settings
 from app.core.base import BaseAdapter
 from app.core.decorators import log_execution, retry, timeout
 from app.core.exceptions import LLMError, RateLimitError
 from app.core.rate_limiter import TokenBucketRateLimiter
-from app.core.types import LLMResponse, MessageHistory
+from app.core.types import (
+    LLMResponse,
+    LLMResponseWithTools,
+    MessageHistory,
+    ToolDefinition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +129,8 @@ class OpenAIAdapter(BaseAdapter):
         temperature: float = 0.7,
         max_tokens: int | None = None,
         tenant_id: str = "default",
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> str:
         """Generate a completion from messages.
 
@@ -130,13 +139,19 @@ class OpenAIAdapter(BaseAdapter):
             temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative)
             max_tokens: Maximum tokens to generate (None = model default)
             tenant_id: Tenant identifier for rate limiting
+            tools: Optional list of tool definitions for function calling
+            tool_choice: Controls which tool to call ("none", "auto", or specific function)
 
         Returns:
-            The generated completion text
+            The generated completion text (may be empty if LLM calls a tool)
 
         Raises:
             LLMError: If the API call fails
             RateLimitError: If rate limit is exceeded
+
+        Note:
+            When tools are provided and LLM decides to call a tool, content may be empty.
+            Use complete_with_metadata() to get tool_calls information.
 
         Example:
             >>> messages = [
@@ -172,15 +187,26 @@ class OpenAIAdapter(BaseAdapter):
                     "message_count": len(messages),
                     "temperature": temperature,
                     "max_tokens": max_tokens,
+                    "tools_provided": tools is not None,
                 },
             )
 
-            response = await self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,  # type: ignore
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            # Build API parameters
+            api_params: dict[str, Any] = {
+                "model": self.model_name,
+                "messages": messages,
+                "temperature": temperature,
+            }
+
+            if max_tokens is not None:
+                api_params["max_tokens"] = max_tokens
+
+            # Add tools if provided
+            if tools is not None:
+                api_params["tools"] = tools
+                api_params["tool_choice"] = tool_choice
+
+            response = await self.client.chat.completions.create(**api_params)  # type: ignore
 
             content = response.choices[0].message.content or ""
 
@@ -191,6 +217,7 @@ class OpenAIAdapter(BaseAdapter):
                     "model": self.model_name,
                     "tokens_used": response.usage.total_tokens if response.usage else 0,
                     "request_count": self._request_count,
+                    "has_tool_calls": response.choices[0].message.tool_calls is not None,
                 },
             )
 
@@ -230,20 +257,26 @@ class OpenAIAdapter(BaseAdapter):
         temperature: float = 0.7,
         max_tokens: int | None = None,
         tenant_id: str = "default",
-    ) -> LLMResponse:
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
+    ) -> LLMResponse | LLMResponseWithTools:
         """Generate completion with full response metadata.
 
         Use this when you need token counts, finish reasons, and other
-        metadata beyond just the completion text.
+        metadata beyond just the completion text. This is the recommended
+        method when using tool calling.
 
         Args:
             messages: Conversation history
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             tenant_id: Tenant identifier for rate limiting
+            tools: Optional list of tool definitions for function calling
+            tool_choice: Controls which tool to call ("none", "auto", or specific function)
 
         Returns:
-            Full LLM response with metadata
+            Full LLM response with metadata. If tools are provided and LLM calls
+            a tool, the response will include a tool_calls field.
 
         Raises:
             LLMError: If the API call fails
@@ -252,7 +285,8 @@ class OpenAIAdapter(BaseAdapter):
         Example:
             >>> response = await adapter.complete_with_metadata(messages)
             >>> print(f"Used {response['tokens_used']} tokens")
-            >>> print(f"Model: {response['model']}")
+            >>> if response.get('tool_calls'):
+            ...     print(f"LLM wants to call: {response['tool_calls'][0]['function']['name']}")
         """
         # Estimate tokens for rate limiting
         estimated_tokens = self._estimate_tokens(messages)
@@ -279,39 +313,77 @@ class OpenAIAdapter(BaseAdapter):
                 extra={
                     "model": self.model_name,
                     "message_count": len(messages),
+                    "tools_provided": tools is not None,
                 },
             )
 
-            response = await self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,  # type: ignore
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            # Build API parameters
+            api_params: dict[str, Any] = {
+                "model": self.model_name,
+                "messages": messages,
+                "temperature": temperature,
+            }
+
+            if max_tokens is not None:
+                api_params["max_tokens"] = max_tokens
+
+            # Add tools if provided
+            if tools is not None:
+                api_params["tools"] = tools
+                api_params["tool_choice"] = tool_choice
+
+            response = await self.client.chat.completions.create(**api_params)  # type: ignore
 
             content = response.choices[0].message.content or ""
             tokens_used = response.usage.total_tokens if response.usage else 0
             finish_reason = response.choices[0].finish_reason or "stop"
+            message = response.choices[0].message
 
             self._request_count += 1
 
-            result: LLMResponse = {
+            # Build base result
+            result_data: dict[str, Any] = {
                 "content": content,
                 "model": response.model,
                 "tokens_used": tokens_used,
                 "finish_reason": finish_reason,
             }
 
-            logger.info(
-                "OpenAI API call with metadata successful",
-                extra={
-                    "model": response.model,
-                    "tokens_used": tokens_used,
-                    "finish_reason": finish_reason,
-                },
-            )
+            # Extract tool calls if present
+            if message.tool_calls:
+                result_data["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in message.tool_calls
+                ]
+                logger.info(
+                    "OpenAI API call with tool calls successful",
+                    extra={
+                        "model": response.model,
+                        "tokens_used": tokens_used,
+                        "finish_reason": finish_reason,
+                        "tool_calls_count": len(message.tool_calls),
+                    },
+                )
+            else:
+                result_data["tool_calls"] = None
+                logger.info(
+                    "OpenAI API call with metadata successful",
+                    extra={
+                        "model": response.model,
+                        "tokens_used": tokens_used,
+                        "finish_reason": finish_reason,
+                    },
+                )
 
-            return result
+            # Return as LLMResponseWithTools (superset of LLMResponse)
+            return result_data  # type: ignore
 
         except OpenAIError as e:
             logger.error(

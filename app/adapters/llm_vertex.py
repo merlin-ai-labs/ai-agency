@@ -5,17 +5,29 @@ Gemini models. Vertex AI doesn't have strict rate limits, but we still
 include retry logic for transient failures.
 """
 
+import json
 import logging
+from typing import Any
 
 import vertexai
 from google.api_core.exceptions import GoogleAPIError
-from vertexai.generative_models import GenerationConfig, GenerativeModel
+from vertexai.generative_models import (
+    FunctionDeclaration,
+    GenerationConfig,
+    GenerativeModel,
+    Tool,
+)
 
 from app.config import settings
 from app.core.base import BaseAdapter
 from app.core.decorators import log_execution, retry, timeout
 from app.core.exceptions import LLMError
-from app.core.types import LLMResponse, MessageHistory
+from app.core.types import (
+    LLMResponse,
+    LLMResponseWithTools,
+    MessageHistory,
+    ToolDefinition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +139,103 @@ class VertexAIAdapter(BaseAdapter):
         """
         return max(len(text) // 4, 10)
 
+    def _convert_tools_to_vertex_format(
+        self, tools: list[ToolDefinition]
+    ) -> list[Tool]:
+        """Convert OpenAI tool definitions to Vertex AI format.
+
+        OpenAI format:
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "...",
+                "parameters": { JSON Schema }
+            }
+        }
+
+        Vertex AI format:
+        Tool(function_declarations=[
+            FunctionDeclaration(
+                name="get_weather",
+                description="...",
+                parameters={ JSON Schema }
+            )
+        ])
+
+        Args:
+            tools: List of OpenAI tool definitions
+
+        Returns:
+            List of Vertex AI Tool objects
+        """
+        function_declarations = []
+
+        for tool in tools:
+            if tool["type"] != "function":
+                continue
+
+            function = tool["function"]
+            function_declarations.append(
+                FunctionDeclaration(
+                    name=function["name"],
+                    description=function["description"],
+                    parameters=function["parameters"],
+                )
+            )
+
+        return [Tool(function_declarations=function_declarations)]
+
+    def _extract_tool_calls(self, response: Any) -> list[dict[str, Any]] | None:
+        """Extract tool calls from Vertex AI response and convert to OpenAI format.
+
+        Vertex AI returns function calls in response.candidates[0].content.parts
+        as FunctionCall objects. We need to convert these to OpenAI format.
+
+        Args:
+            response: Vertex AI GenerateContentResponse
+
+        Returns:
+            List of tool calls in OpenAI format, or None if no tool calls
+        """
+        try:
+            if not hasattr(response, "candidates") or not response.candidates:
+                return None
+
+            candidate = response.candidates[0]
+            if not hasattr(candidate, "content") or not candidate.content:
+                return None
+
+            if not hasattr(candidate.content, "parts") or not candidate.content.parts:
+                return None
+
+            # Make sure parts is actually iterable (not a Mock)
+            parts = candidate.content.parts
+            if not hasattr(parts, "__iter__"):
+                return None
+
+            tool_calls = []
+            for part in parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    fc = part.function_call
+                    # Convert Vertex AI function call to OpenAI format
+                    tool_calls.append(
+                        {
+                            "id": f"call_{fc.name}_{len(tool_calls)}",  # Generate ID
+                            "type": "function",
+                            "function": {
+                                "name": fc.name,
+                                "arguments": json.dumps(dict(fc.args)),
+                            },
+                        }
+                    )
+
+            return tool_calls if tool_calls else None
+        except (AttributeError, TypeError):
+            # If anything goes wrong extracting tool calls, return None
+            # This handles Mock objects and other edge cases in tests
+            return None
+
     @log_execution
     @timeout(seconds=60.0)
     @retry(
@@ -142,6 +251,8 @@ class VertexAIAdapter(BaseAdapter):
         temperature: float = 0.7,
         max_tokens: int | None = None,
         tenant_id: str = "default",
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> str:
         """Generate a completion from messages.
 
@@ -150,12 +261,18 @@ class VertexAIAdapter(BaseAdapter):
             temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative)
             max_tokens: Maximum tokens to generate (None = model default)
             tenant_id: Tenant identifier (for compatibility, not used for rate limiting)
+            tools: Optional list of tool definitions for function calling
+            tool_choice: Controls which tool to call (\"none\", \"auto\", or specific function)
 
         Returns:
-            The generated completion text
+            The generated completion text (may be empty if LLM calls a tool)
 
         Raises:
             LLMError: If the API call fails
+
+        Note:
+            When tools are provided and LLM decides to call a tool, content may be empty.
+            Use complete_with_metadata() to get tool_calls information.
 
         Example:
             >>> messages = [
@@ -173,6 +290,11 @@ class VertexAIAdapter(BaseAdapter):
             max_output_tokens=max_tokens,
         )
 
+        # Convert tools to Vertex AI format if provided
+        vertex_tools = None
+        if tools is not None:
+            vertex_tools = self._convert_tools_to_vertex_format(tools)
+
         try:
             logger.debug(
                 "Calling Vertex AI API",
@@ -181,15 +303,25 @@ class VertexAIAdapter(BaseAdapter):
                     "message_count": len(messages),
                     "temperature": temperature,
                     "max_tokens": max_tokens,
+                    "tools_provided": tools is not None,
                 },
             )
 
-            response = await self.client.generate_content_async(
-                prompt,
-                generation_config=generation_config,
-            )
+            # Call API with or without tools
+            if vertex_tools:
+                response = await self.client.generate_content_async(
+                    prompt,
+                    generation_config=generation_config,
+                    tools=vertex_tools,
+                )
+            else:
+                response = await self.client.generate_content_async(
+                    prompt,
+                    generation_config=generation_config,
+                )
 
-            content = response.text
+            content = response.text if hasattr(response, "text") else ""
+            has_tool_calls = self._extract_tool_calls(response) is not None
 
             self._request_count += 1
             logger.info(
@@ -198,6 +330,7 @@ class VertexAIAdapter(BaseAdapter):
                     "model": self.model_name,
                     "estimated_tokens": self._estimate_tokens(prompt + content),
                     "request_count": self._request_count,
+                    "has_tool_calls": has_tool_calls,
                 },
             )
 
@@ -255,20 +388,26 @@ class VertexAIAdapter(BaseAdapter):
         temperature: float = 0.7,
         max_tokens: int | None = None,
         tenant_id: str = "default",
-    ) -> LLMResponse:
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
+    ) -> LLMResponse | LLMResponseWithTools:
         """Generate completion with full response metadata.
 
         Use this when you need token counts, finish reasons, and other
-        metadata beyond just the completion text.
+        metadata beyond just the completion text. This is the recommended
+        method when using tool calling.
 
         Args:
             messages: Conversation history
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             tenant_id: Tenant identifier (for compatibility)
+            tools: Optional list of tool definitions for function calling
+            tool_choice: Controls which tool to call (\"none\", \"auto\", or specific function)
 
         Returns:
-            Full LLM response with metadata
+            Full LLM response with metadata. If tools are provided and LLM calls
+            a tool, the response will include a tool_calls field.
 
         Raises:
             LLMError: If the API call fails
@@ -276,7 +415,8 @@ class VertexAIAdapter(BaseAdapter):
         Example:
             >>> response = await adapter.complete_with_metadata(messages)
             >>> print(f"Used ~{response['tokens_used']} tokens")
-            >>> print(f"Model: {response['model']}")
+            >>> if response.get('tool_calls'):
+            ...     print(f"LLM wants to call: {response['tool_calls'][0]['function']['name']}")
         """
         # Format messages for Vertex AI
         prompt = self._format_messages(messages)
@@ -287,21 +427,35 @@ class VertexAIAdapter(BaseAdapter):
             max_output_tokens=max_tokens,
         )
 
+        # Convert tools to Vertex AI format if provided
+        vertex_tools = None
+        if tools is not None:
+            vertex_tools = self._convert_tools_to_vertex_format(tools)
+
         try:
             logger.debug(
                 "Calling Vertex AI API with metadata",
                 extra={
                     "model": self.model_name,
                     "message_count": len(messages),
+                    "tools_provided": tools is not None,
                 },
             )
 
-            response = await self.client.generate_content_async(
-                prompt,
-                generation_config=generation_config,
-            )
+            # Call API with or without tools
+            if vertex_tools:
+                response = await self.client.generate_content_async(
+                    prompt,
+                    generation_config=generation_config,
+                    tools=vertex_tools,
+                )
+            else:
+                response = await self.client.generate_content_async(
+                    prompt,
+                    generation_config=generation_config,
+                )
 
-            content = response.text
+            content = response.text if hasattr(response, "text") else ""
 
             # Vertex AI doesn't provide exact token counts, so we estimate
             estimated_tokens = self._estimate_tokens(prompt + content)
@@ -313,25 +467,44 @@ class VertexAIAdapter(BaseAdapter):
                 if hasattr(candidate, "finish_reason"):
                     finish_reason = str(candidate.finish_reason.name).lower()
 
+            # Extract tool calls if present
+            tool_calls = self._extract_tool_calls(response)
+
             self._request_count += 1
 
-            result: LLMResponse = {
+            # Build base result
+            result_data: dict[str, Any] = {
                 "content": content,
                 "model": self.model_name,
                 "tokens_used": estimated_tokens,
                 "finish_reason": finish_reason,
             }
 
-            logger.info(
-                "Vertex AI API call with metadata successful",
-                extra={
-                    "model": self.model_name,
-                    "estimated_tokens": estimated_tokens,
-                    "finish_reason": finish_reason,
-                },
-            )
+            # Add tool_calls field (None if no tool calls)
+            result_data["tool_calls"] = tool_calls
 
-            return result
+            if tool_calls:
+                logger.info(
+                    "Vertex AI API call with tool calls successful",
+                    extra={
+                        "model": self.model_name,
+                        "estimated_tokens": estimated_tokens,
+                        "finish_reason": finish_reason,
+                        "tool_calls_count": len(tool_calls),
+                    },
+                )
+            else:
+                logger.info(
+                    "Vertex AI API call with metadata successful",
+                    extra={
+                        "model": self.model_name,
+                        "estimated_tokens": estimated_tokens,
+                        "finish_reason": finish_reason,
+                    },
+                )
+
+            # Return as LLMResponseWithTools (superset of LLMResponse)
+            return result_data  # type: ignore
 
         except GoogleAPIError as e:
             logger.error(

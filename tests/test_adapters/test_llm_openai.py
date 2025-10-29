@@ -196,6 +196,7 @@ class TestOpenAIAdapterCompleteWithMetadata:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "Python is a language."
+        mock_response.choices[0].message.tool_calls = None  # No tool calls
         mock_response.choices[0].finish_reason = "stop"
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 50
@@ -213,6 +214,7 @@ class TestOpenAIAdapterCompleteWithMetadata:
         assert result["model"] == "gpt-4-turbo-2024-04-09"
         assert result["tokens_used"] == 50
         assert result["finish_reason"] == "stop"
+        assert result["tool_calls"] is None
 
     @pytest.mark.asyncio
     async def test_complete_with_metadata_no_usage(self, openai_adapter, sample_messages):
@@ -220,6 +222,7 @@ class TestOpenAIAdapterCompleteWithMetadata:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "Response"
+        mock_response.choices[0].message.tool_calls = None  # No tool calls
         mock_response.choices[0].finish_reason = "stop"
         mock_response.model = "gpt-4"
         mock_response.usage = None  # No usage data
@@ -235,6 +238,7 @@ class TestOpenAIAdapterCompleteWithMetadata:
 
         assert result["content"] == "Response"
         assert result["tokens_used"] == 0  # Default to 0 when usage is None
+        assert result["tool_calls"] is None
 
 
 class TestOpenAIAdapterTokenEstimation:
@@ -308,3 +312,290 @@ class TestOpenAIAdapterRetry:
 
         # Should have tried only once (no retry because exception is converted)
         assert openai_adapter.client.chat.completions.create.call_count == 1
+
+
+class TestOpenAIAdapterToolCalling:
+    """Test OpenAI adapter tool calling functionality."""
+
+    @pytest.fixture
+    def weather_tool_definition(self):
+        """Sample tool definition for testing."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current weather for a location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "City name",
+                        },
+                        "units": {
+                            "type": "string",
+                            "enum": ["celsius", "fahrenheit"],
+                            "description": "Temperature units",
+                        },
+                    },
+                    "required": ["location"],
+                },
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_complete_with_tools_no_call(
+        self, openai_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete with tools when LLM doesn't call any tool."""
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "The weather is nice today."
+        mock_response.choices[0].message.tool_calls = None  # No tool call
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.model = "gpt-4-turbo-2024-04-09"
+        mock_response.usage.total_tokens = 50
+
+        openai_adapter.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await openai_adapter.complete(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            tools=[weather_tool_definition],
+        )
+
+        assert result == "The weather is nice today."
+        # Verify tools were passed to API
+        call_kwargs = openai_adapter.client.chat.completions.create.call_args.kwargs
+        assert "tools" in call_kwargs
+        assert call_kwargs["tools"] == [weather_tool_definition]
+        assert call_kwargs["tool_choice"] == "auto"
+
+    @pytest.mark.asyncio
+    async def test_complete_with_metadata_tool_call(
+        self, openai_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete_with_metadata when LLM makes a tool call."""
+        # Create mock tool call
+        mock_tool_call = Mock()
+        mock_tool_call.id = "call_abc123"
+        mock_tool_call.type = "function"
+        mock_tool_call.function.name = "get_weather"
+        mock_tool_call.function.arguments = '{"location": "Paris", "units": "celsius"}'
+
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = ""  # Empty when tool call
+        mock_response.choices[0].message.tool_calls = [mock_tool_call]
+        mock_response.choices[0].finish_reason = "tool_calls"
+        mock_response.model = "gpt-4-turbo-2024-04-09"
+        mock_response.usage.total_tokens = 75
+
+        openai_adapter.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await openai_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            tools=[weather_tool_definition],
+        )
+
+        assert result["content"] == ""
+        assert result["model"] == "gpt-4-turbo-2024-04-09"
+        assert result["tokens_used"] == 75
+        assert result["finish_reason"] == "tool_calls"
+        assert result["tool_calls"] is not None
+        assert len(result["tool_calls"]) == 1
+
+        tool_call = result["tool_calls"][0]
+        assert tool_call["id"] == "call_abc123"
+        assert tool_call["type"] == "function"
+        assert tool_call["function"]["name"] == "get_weather"
+        assert tool_call["function"]["arguments"] == '{"location": "Paris", "units": "celsius"}'
+
+    @pytest.mark.asyncio
+    async def test_complete_without_tools_backward_compat(
+        self, openai_adapter, sample_messages
+    ):
+        """Test that complete works without tools (backward compatibility)."""
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "Hello!"
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.model = "gpt-4-turbo-2024-04-09"
+        mock_response.usage.total_tokens = 20
+
+        openai_adapter.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await openai_adapter.complete(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            # No tools parameter
+        )
+
+        assert result == "Hello!"
+        # Verify tools were NOT passed to API
+        call_kwargs = openai_adapter.client.chat.completions.create.call_args.kwargs
+        assert "tools" not in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_tool_choice_none(
+        self, openai_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete with tool_choice='none' forces no tool use."""
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "Weather info without tool."
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.model = "gpt-4-turbo-2024-04-09"
+        mock_response.usage.total_tokens = 30
+
+        openai_adapter.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await openai_adapter.complete(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            tools=[weather_tool_definition],
+            tool_choice="none",
+        )
+
+        assert result == "Weather info without tool."
+        # Verify tool_choice was passed
+        call_kwargs = openai_adapter.client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["tool_choice"] == "none"
+
+    @pytest.mark.asyncio
+    async def test_tool_choice_specific_function(
+        self, openai_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete with specific function in tool_choice."""
+        # Create mock tool call (forced by tool_choice)
+        mock_tool_call = Mock()
+        mock_tool_call.id = "call_xyz789"
+        mock_tool_call.type = "function"
+        mock_tool_call.function.name = "get_weather"
+        mock_tool_call.function.arguments = '{"location": "London"}'
+
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = ""
+        mock_response.choices[0].message.tool_calls = [mock_tool_call]
+        mock_response.choices[0].finish_reason = "tool_calls"
+        mock_response.model = "gpt-4-turbo-2024-04-09"
+        mock_response.usage.total_tokens = 40
+
+        openai_adapter.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await openai_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            tools=[weather_tool_definition],
+            tool_choice={"type": "function", "function": {"name": "get_weather"}},
+        )
+
+        assert result["tool_calls"] is not None
+        assert len(result["tool_calls"]) == 1
+        assert result["tool_calls"][0]["function"]["name"] == "get_weather"
+
+        # Verify tool_choice dict was passed
+        call_kwargs = openai_adapter.client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["tool_choice"] == {
+            "type": "function",
+            "function": {"name": "get_weather"},
+        }
+
+    @pytest.mark.asyncio
+    async def test_multiple_tool_calls(
+        self, openai_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete_with_metadata when LLM makes multiple tool calls."""
+        # Create mock tool calls
+        mock_tool_call_1 = Mock()
+        mock_tool_call_1.id = "call_1"
+        mock_tool_call_1.type = "function"
+        mock_tool_call_1.function.name = "get_weather"
+        mock_tool_call_1.function.arguments = '{"location": "Paris"}'
+
+        mock_tool_call_2 = Mock()
+        mock_tool_call_2.id = "call_2"
+        mock_tool_call_2.type = "function"
+        mock_tool_call_2.function.name = "get_weather"
+        mock_tool_call_2.function.arguments = '{"location": "London"}'
+
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = ""
+        mock_response.choices[0].message.tool_calls = [mock_tool_call_1, mock_tool_call_2]
+        mock_response.choices[0].finish_reason = "tool_calls"
+        mock_response.model = "gpt-4-turbo-2024-04-09"
+        mock_response.usage.total_tokens = 100
+
+        openai_adapter.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await openai_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            tools=[weather_tool_definition],
+        )
+
+        assert result["tool_calls"] is not None
+        assert len(result["tool_calls"]) == 2
+        assert result["tool_calls"][0]["id"] == "call_1"
+        assert result["tool_calls"][0]["function"]["arguments"] == '{"location": "Paris"}'
+        assert result["tool_calls"][1]["id"] == "call_2"
+        assert result["tool_calls"][1]["function"]["arguments"] == '{"location": "London"}'
+
+    @pytest.mark.asyncio
+    async def test_complete_with_tools_empty_content(
+        self, openai_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test that empty content is handled when tool call is made."""
+        mock_tool_call = Mock()
+        mock_tool_call.id = "call_test"
+        mock_tool_call.type = "function"
+        mock_tool_call.function.name = "get_weather"
+        mock_tool_call.function.arguments = '{"location": "NYC"}'
+
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = None  # Can be None from API
+        mock_response.choices[0].message.tool_calls = [mock_tool_call]
+        mock_response.choices[0].finish_reason = "tool_calls"
+        mock_response.model = "gpt-4-turbo-2024-04-09"
+        mock_response.usage.total_tokens = 60
+
+        openai_adapter.client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        # Test complete() method
+        result_str = await openai_adapter.complete(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            tools=[weather_tool_definition],
+        )
+
+        assert result_str == ""  # Should convert None to empty string
+
+        # Test complete_with_metadata() method
+        result_dict = await openai_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+            tools=[weather_tool_definition],
+        )
+
+        assert result_dict["content"] == ""  # Should convert None to empty string
+        assert result_dict["tool_calls"] is not None

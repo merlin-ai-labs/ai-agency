@@ -491,6 +491,229 @@ LLM_PROVIDER=mistral
 MISTRAL_API_KEY=...
 ```
 
+### Tool Calling (Function Calling)
+
+**Overview:**
+
+Tool calling (also called function calling) allows LLMs to request execution of external functions/tools. The LLM decides when and how to call tools based on the conversation context.
+
+**Supported Providers:**
+- ✅ OpenAI - Native support
+- ✅ Mistral - OpenAI-compatible format
+- ✅ Vertex AI - Full support with automatic format conversion
+
+**How It Works:**
+1. Define tool schemas (function signatures with JSON Schema)
+2. Pass tools to LLM adapter
+3. LLM returns tool calls when needed
+4. Execute tools and return results
+5. LLM generates final response with tool results
+
+#### Defining Tools
+
+Tools are defined using OpenAI's function calling format:
+
+```python
+weather_tool = {
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City name (e.g., 'London', 'Paris')",
+                },
+                "units": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "Temperature units",
+                },
+            },
+            "required": ["location"],
+        },
+    },
+}
+```
+
+#### Using Tools with Adapters
+
+All adapters support tool calling through the same interface:
+
+```python
+from app.adapters.llm_factory import get_llm_adapter
+
+# Initialize adapter (works with OpenAI or Mistral)
+llm = get_llm_adapter()  # Uses configured provider
+
+# Call LLM with tools
+response = await llm.complete_with_metadata(
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What's the weather in Paris?"}
+    ],
+    tools=[weather_tool],  # Pass tool definitions
+    tool_choice="auto",     # Let LLM decide when to use tools
+    tenant_id="user_123",
+)
+
+# Check if LLM wants to call a tool
+if response.get("tool_calls"):
+    for tool_call in response["tool_calls"]:
+        # Extract tool call details
+        tool_name = tool_call["function"]["name"]
+        tool_args = json.loads(tool_call["function"]["arguments"])
+
+        # Execute your tool
+        if tool_name == "get_weather":
+            result = await get_weather(**tool_args)
+
+        # Add tool result to conversation
+        messages.append({
+            "role": "assistant",
+            "content": response["content"] or "",
+            "tool_calls": [tool_call],
+        })
+        messages.append({
+            "role": "tool",
+            "content": json.dumps(result),
+            "tool_call_id": tool_call["id"],
+        })
+
+        # Call LLM again with tool results
+        final_response = await llm.complete_with_metadata(
+            messages=messages,
+            tools=[weather_tool],
+            tenant_id="user_123",
+        )
+
+        assistant_message = final_response["content"]
+else:
+    # No tool call, use response directly
+    assistant_message = response["content"]
+```
+
+#### Tool Choice Options
+
+Control when tools are used:
+
+```python
+# Let LLM decide (default)
+response = await llm.complete_with_metadata(
+    messages=messages,
+    tools=[weather_tool],
+    tool_choice="auto",  # LLM decides
+)
+
+# Force LLM to NOT use tools
+response = await llm.complete_with_metadata(
+    messages=messages,
+    tools=[weather_tool],
+    tool_choice="none",  # Never call tools
+)
+
+# Force specific tool (OpenAI/Mistral only)
+response = await llm.complete_with_metadata(
+    messages=messages,
+    tools=[weather_tool],
+    tool_choice={
+        "type": "function",
+        "function": {"name": "get_weather"}
+    },  # Must call this tool
+)
+```
+
+#### Complete Example: Multi-Turn Tool Calling
+
+See `app/flows/agents/weather_agent.py` for a complete reference implementation. Key pattern:
+
+```python
+# Step 1: Call LLM with tools
+llm_response = await self.llm.complete_with_metadata(
+    messages=messages,
+    tools=[WEATHER_TOOL_DEFINITION],
+    tool_choice="auto",
+    tenant_id=tenant_id,
+)
+
+# Step 2: Check for tool calls
+if llm_response.get("tool_calls"):
+    # Step 3: Execute tool
+    tool_call = llm_response["tool_calls"][0]
+    tool_name = tool_call["function"]["name"]
+    tool_args = json.loads(tool_call["function"]["arguments"])
+
+    result = await execute_tool(tool_name, tool_args)
+
+    # Step 4: Add tool messages to conversation
+    messages.append({
+        "role": "assistant",
+        "content": llm_response["content"] or "",
+        "tool_calls": [tool_call],
+    })
+    messages.append({
+        "role": "tool",
+        "content": json.dumps(result),
+        "tool_call_id": tool_call["id"],
+    })
+
+    # Step 5: Call LLM again with tool results
+    final_response = await self.llm.complete_with_metadata(
+        messages=messages,
+        tools=[WEATHER_TOOL_DEFINITION],
+        tenant_id=tenant_id,
+    )
+
+    assistant_message = final_response["content"]
+```
+
+#### Tips for Tool Calling
+
+**1. Clear descriptions are crucial:**
+```python
+# Bad
+"description": "Gets weather"
+
+# Good
+"description": "Get current weather conditions including temperature, humidity, and conditions for a specific city. Returns temperature in specified units."
+```
+
+**2. Use specific parameter descriptions:**
+```python
+"location": {
+    "type": "string",
+    "description": "City name, e.g., 'London', 'New York', 'Tokyo'"
+}
+```
+
+**3. Handle missing tool_call_id gracefully:**
+```python
+tool_call_id = tool_call.get("id", f"call_{uuid.uuid4().hex[:8]}")
+```
+
+**4. Always validate tool arguments:**
+```python
+tool_args = json.loads(tool_call["function"]["arguments"])
+if "location" not in tool_args:
+    # Handle missing required parameter
+    pass
+```
+
+**5. Test with multiple providers:**
+```python
+# Test that tools work with both OpenAI and Mistral
+@pytest.mark.parametrize("provider", ["openai", "mistral"])
+async def test_tool_calling(provider):
+    llm = get_llm_adapter(provider=provider)
+    response = await llm.complete_with_metadata(
+        messages=messages,
+        tools=[tool],
+    )
+    # Verify tool calling works
+```
+
 ---
 
 ## Testing

@@ -40,7 +40,9 @@ def mock_mistral_response():
     return {
         "choices": [
             {
-                "message": {"content": "Python is a programming language."},
+                "message": {
+                    "content": "Python is a programming language.",
+                },
                 "finish_reason": "stop",
             }
         ],
@@ -249,6 +251,7 @@ class TestMistralAdapterCompleteWithMetadata:
             assert result["model"] == "mistral-medium-latest"
             assert result["tokens_used"] == 50
             assert result["finish_reason"] == "stop"
+            assert result["tool_calls"] is None
 
     @pytest.mark.asyncio
     async def test_complete_with_metadata_no_usage(self, mistral_adapter, sample_messages):
@@ -281,6 +284,7 @@ class TestMistralAdapterCompleteWithMetadata:
 
             assert result["content"] == "Response"
             assert result["tokens_used"] == 0  # Default when usage missing
+            assert result["tool_calls"] is None
 
 
 class TestMistralAdapterTokenEstimation:
@@ -394,3 +398,320 @@ class TestMistralAdapterHeaders:
             call_kwargs = mock_client.post.call_args[1]["headers"]
             assert call_kwargs["Authorization"] == "Bearer test-key"
             assert call_kwargs["Content-Type"] == "application/json"
+
+
+class TestMistralAdapterToolCalling:
+    """Test Mistral adapter tool calling functionality."""
+
+    @pytest.fixture
+    def weather_tool_definition(self):
+        """Sample tool definition for testing."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current weather for a location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "City name",
+                        },
+                        "units": {
+                            "type": "string",
+                            "enum": ["celsius", "fahrenheit"],
+                        },
+                    },
+                    "required": ["location"],
+                },
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_complete_with_tools_no_call(
+        self, mistral_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete with tools when LLM doesn't call any tool."""
+        mock_response_data = {
+            "choices": [
+                {
+                    "message": {"content": "The weather is nice today."},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"total_tokens": 50},
+            "model": "mistral-medium-latest",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_client_class.return_value = mock_client
+
+            result = await mistral_adapter.complete(
+                messages=sample_messages,
+                tenant_id="test-tenant",
+                tools=[weather_tool_definition],
+            )
+
+            assert result == "The weather is nice today."
+            # Verify tools were passed to API
+            call_kwargs = mock_client.post.call_args[1]["json"]
+            assert "tools" in call_kwargs
+            assert call_kwargs["tools"] == [weather_tool_definition]
+            assert call_kwargs["tool_choice"] == "auto"
+
+    @pytest.mark.asyncio
+    async def test_complete_with_metadata_tool_call(
+        self, mistral_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete_with_metadata when LLM makes a tool call."""
+        mock_response_data = {
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_abc123",
+                                "type": "function",
+                                "function": {
+                                    "name": "get_weather",
+                                    "arguments": '{"location": "Paris", "units": "celsius"}',
+                                },
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            "usage": {"total_tokens": 75},
+            "model": "mistral-medium-latest",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_client_class.return_value = mock_client
+
+            result = await mistral_adapter.complete_with_metadata(
+                messages=sample_messages,
+                tenant_id="test-tenant",
+                tools=[weather_tool_definition],
+            )
+
+            assert result["content"] == ""
+            assert result["model"] == "mistral-medium-latest"
+            assert result["tokens_used"] == 75
+            assert result["finish_reason"] == "tool_calls"
+            assert result["tool_calls"] is not None
+            assert len(result["tool_calls"]) == 1
+
+            tool_call = result["tool_calls"][0]
+            assert tool_call["id"] == "call_abc123"
+            assert tool_call["type"] == "function"
+            assert tool_call["function"]["name"] == "get_weather"
+            assert tool_call["function"]["arguments"] == '{"location": "Paris", "units": "celsius"}'
+
+    @pytest.mark.asyncio
+    async def test_complete_without_tools_backward_compat(
+        self, mistral_adapter, sample_messages
+    ):
+        """Test that complete works without tools (backward compatibility)."""
+        mock_response_data = {
+            "choices": [{"message": {"content": "Hello!"}, "finish_reason": "stop"}],
+            "usage": {"total_tokens": 20},
+            "model": "mistral-medium-latest",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_client_class.return_value = mock_client
+
+            result = await mistral_adapter.complete(
+                messages=sample_messages,
+                tenant_id="test-tenant",
+                # No tools parameter
+            )
+
+            assert result == "Hello!"
+            # Verify tools were NOT passed to API
+            call_kwargs = mock_client.post.call_args[1]["json"]
+            assert "tools" not in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_tool_choice_none(
+        self, mistral_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete with tool_choice='none' forces no tool use."""
+        mock_response_data = {
+            "choices": [
+                {
+                    "message": {"content": "Weather info without tool."},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"total_tokens": 30},
+            "model": "mistral-medium-latest",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_client_class.return_value = mock_client
+
+            result = await mistral_adapter.complete(
+                messages=sample_messages,
+                tenant_id="test-tenant",
+                tools=[weather_tool_definition],
+                tool_choice="none",
+            )
+
+            assert result == "Weather info without tool."
+            # Verify tool_choice was passed
+            call_kwargs = mock_client.post.call_args[1]["json"]
+            assert call_kwargs["tool_choice"] == "none"
+
+    @pytest.mark.asyncio
+    async def test_multiple_tool_calls(
+        self, mistral_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test complete_with_metadata when LLM makes multiple tool calls."""
+        mock_response_data = {
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "get_weather",
+                                    "arguments": '{"location": "Paris"}',
+                                },
+                            },
+                            {
+                                "id": "call_2",
+                                "type": "function",
+                                "function": {
+                                    "name": "get_weather",
+                                    "arguments": '{"location": "London"}',
+                                },
+                            },
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            "usage": {"total_tokens": 100},
+            "model": "mistral-medium-latest",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_client_class.return_value = mock_client
+
+            result = await mistral_adapter.complete_with_metadata(
+                messages=sample_messages,
+                tenant_id="test-tenant",
+                tools=[weather_tool_definition],
+            )
+
+            assert result["tool_calls"] is not None
+            assert len(result["tool_calls"]) == 2
+            assert result["tool_calls"][0]["id"] == "call_1"
+            assert result["tool_calls"][0]["function"]["arguments"] == '{"location": "Paris"}'
+            assert result["tool_calls"][1]["id"] == "call_2"
+            assert result["tool_calls"][1]["function"]["arguments"] == '{"location": "London"}'
+
+    @pytest.mark.asyncio
+    async def test_complete_with_tools_null_content(
+        self, mistral_adapter, sample_messages, weather_tool_definition
+    ):
+        """Test that null content is handled when tool call is made."""
+        mock_response_data = {
+            "choices": [
+                {
+                    "message": {
+                        "content": None,  # Can be null from API
+                        "tool_calls": [
+                            {
+                                "id": "call_test",
+                                "type": "function",
+                                "function": {
+                                    "name": "get_weather",
+                                    "arguments": '{"location": "NYC"}',
+                                },
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            "usage": {"total_tokens": 60},
+            "model": "mistral-medium-latest",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_response_data
+
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = AsyncMock()
+            mock_client_class.return_value = mock_client
+
+            # Test complete() method
+            result_str = await mistral_adapter.complete(
+                messages=sample_messages,
+                tenant_id="test-tenant",
+                tools=[weather_tool_definition],
+            )
+
+            assert result_str == ""  # Should convert None to empty string
+
+            # Test complete_with_metadata() method
+            result_dict = await mistral_adapter.complete_with_metadata(
+                messages=sample_messages,
+                tenant_id="test-tenant",
+                tools=[weather_tool_definition],
+            )
+
+            assert result_dict["content"] == ""  # Should convert None to empty string
+            assert result_dict["tool_calls"] is not None

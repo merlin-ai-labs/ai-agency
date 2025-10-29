@@ -6,6 +6,7 @@ retry logic, and comprehensive error handling.
 """
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -14,7 +15,12 @@ from app.core.base import BaseAdapter
 from app.core.decorators import log_execution, retry, timeout
 from app.core.exceptions import LLMError, RateLimitError
 from app.core.rate_limiter import TokenBucketRateLimiter
-from app.core.types import LLMResponse, MessageHistory
+from app.core.types import (
+    LLMResponse,
+    LLMResponseWithTools,
+    MessageHistory,
+    ToolDefinition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +129,8 @@ class MistralAdapter(BaseAdapter):
         temperature: float = 0.7,
         max_tokens: int | None = None,
         tenant_id: str = "default",
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> str:
         """Generate a completion from messages.
 
@@ -131,13 +139,19 @@ class MistralAdapter(BaseAdapter):
             temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative)
             max_tokens: Maximum tokens to generate (None = model default)
             tenant_id: Tenant identifier for rate limiting
+            tools: Optional list of tool definitions for function calling
+            tool_choice: Controls which tool to call ("none", "auto", or specific function)
 
         Returns:
-            The generated completion text
+            The generated completion text (may be empty if LLM calls a tool)
 
         Raises:
             LLMError: If the API call fails
             RateLimitError: If rate limit is exceeded
+
+        Note:
+            When tools are provided and LLM decides to call a tool, content may be empty.
+            Use complete_with_metadata() to get tool_calls information.
 
         Example:
             >>> messages = [
@@ -165,7 +179,7 @@ class MistralAdapter(BaseAdapter):
             raise
 
         # Prepare request payload
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
             "temperature": temperature,
@@ -173,6 +187,11 @@ class MistralAdapter(BaseAdapter):
 
         if max_tokens:
             payload["max_tokens"] = max_tokens
+
+        # Add tools if provided (Mistral uses OpenAI-compatible format)
+        if tools is not None:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -188,6 +207,7 @@ class MistralAdapter(BaseAdapter):
                     "message_count": len(messages),
                     "temperature": temperature,
                     "max_tokens": max_tokens,
+                    "tools_provided": tools is not None,
                 },
             )
 
@@ -210,7 +230,8 @@ class MistralAdapter(BaseAdapter):
 
                 data = response.json()
 
-                content = data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"].get("content") or ""
+                has_tool_calls = "tool_calls" in data["choices"][0]["message"]
 
                 self._request_count += 1
                 logger.info(
@@ -219,6 +240,7 @@ class MistralAdapter(BaseAdapter):
                         "model": self.model_name,
                         "tokens_used": data.get("usage", {}).get("total_tokens", 0),
                         "request_count": self._request_count,
+                        "has_tool_calls": has_tool_calls,
                     },
                 )
 
@@ -279,20 +301,26 @@ class MistralAdapter(BaseAdapter):
         temperature: float = 0.7,
         max_tokens: int | None = None,
         tenant_id: str = "default",
-    ) -> LLMResponse:
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
+    ) -> LLMResponse | LLMResponseWithTools:
         """Generate completion with full response metadata.
 
         Use this when you need token counts, finish reasons, and other
-        metadata beyond just the completion text.
+        metadata beyond just the completion text. This is the recommended
+        method when using tool calling.
 
         Args:
             messages: Conversation history
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             tenant_id: Tenant identifier for rate limiting
+            tools: Optional list of tool definitions for function calling
+            tool_choice: Controls which tool to call ("none", "auto", or specific function)
 
         Returns:
-            Full LLM response with metadata
+            Full LLM response with metadata. If tools are provided and LLM calls
+            a tool, the response will include a tool_calls field.
 
         Raises:
             LLMError: If the API call fails
@@ -301,7 +329,8 @@ class MistralAdapter(BaseAdapter):
         Example:
             >>> response = await adapter.complete_with_metadata(messages)
             >>> print(f"Used {response['tokens_used']} tokens")
-            >>> print(f"Model: {response['model']}")
+            >>> if response.get('tool_calls'):
+            ...     print(f"LLM wants to call: {response['tool_calls'][0]['function']['name']}")
         """
         # Estimate tokens for rate limiting
         estimated_tokens = self._estimate_tokens(messages)
@@ -322,7 +351,7 @@ class MistralAdapter(BaseAdapter):
             raise
 
         # Prepare request payload
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
             "temperature": temperature,
@@ -330,6 +359,11 @@ class MistralAdapter(BaseAdapter):
 
         if max_tokens:
             payload["max_tokens"] = max_tokens
+
+        # Add tools if provided (Mistral uses OpenAI-compatible format)
+        if tools is not None:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -343,6 +377,7 @@ class MistralAdapter(BaseAdapter):
                 extra={
                     "model": self.model_name,
                     "message_count": len(messages),
+                    "tools_provided": tools is not None,
                 },
             )
 
@@ -365,30 +400,47 @@ class MistralAdapter(BaseAdapter):
 
                 data = response.json()
 
-                content = data["choices"][0]["message"]["content"]
+                message = data["choices"][0]["message"]
+                content = message.get("content") or ""
                 tokens_used = data.get("usage", {}).get("total_tokens", 0)
                 finish_reason = data["choices"][0].get("finish_reason", "stop")
                 model_used = data.get("model", self.model_name)
 
                 self._request_count += 1
 
-                result: LLMResponse = {
+                # Build base result
+                result_data: dict[str, Any] = {
                     "content": content,
                     "model": model_used,
                     "tokens_used": tokens_used,
                     "finish_reason": finish_reason,
                 }
 
-                logger.info(
-                    "Mistral API call with metadata successful",
-                    extra={
-                        "model": model_used,
-                        "tokens_used": tokens_used,
-                        "finish_reason": finish_reason,
-                    },
-                )
+                # Extract tool calls if present (Mistral uses OpenAI-compatible format)
+                if "tool_calls" in message and message["tool_calls"]:
+                    result_data["tool_calls"] = message["tool_calls"]
+                    logger.info(
+                        "Mistral API call with tool calls successful",
+                        extra={
+                            "model": model_used,
+                            "tokens_used": tokens_used,
+                            "finish_reason": finish_reason,
+                            "tool_calls_count": len(message["tool_calls"]),
+                        },
+                    )
+                else:
+                    result_data["tool_calls"] = None
+                    logger.info(
+                        "Mistral API call with metadata successful",
+                        extra={
+                            "model": model_used,
+                            "tokens_used": tokens_used,
+                            "finish_reason": finish_reason,
+                        },
+                    )
 
-                return result
+                # Return as LLMResponseWithTools (superset of LLMResponse)
+                return result_data  # type: ignore
 
         except RateLimitError:
             # Re-raise RateLimitError without wrapping

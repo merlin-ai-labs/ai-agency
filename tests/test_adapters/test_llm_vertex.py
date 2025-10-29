@@ -110,6 +110,7 @@ class TestVertexAIAdapterComplete:
         # Mock response
         mock_response = Mock()
         mock_response.text = "Python is a programming language."
+        mock_response.candidates = []  # No tool calls
 
         vertex_adapter.client.generate_content_async = AsyncMock(
             return_value=mock_response
@@ -131,6 +132,7 @@ class TestVertexAIAdapterComplete:
 
         mock_response = Mock()
         mock_response.text = "Python is great."
+        mock_response.candidates = []  # No tool calls
 
         vertex_adapter.client.generate_content_async = AsyncMock(
             return_value=mock_response
@@ -186,6 +188,7 @@ class TestVertexAIAdapterCompleteWithMetadata:
         """Test successful completion with metadata."""
         mock_candidate = Mock()
         mock_candidate.finish_reason.name = "STOP"
+        mock_candidate.content = None  # No tool calls
 
         mock_response = Mock()
         mock_response.text = "Python is a language."
@@ -204,6 +207,7 @@ class TestVertexAIAdapterCompleteWithMetadata:
         assert result["model"] == "gemini-2.0-flash-exp"
         assert result["tokens_used"] > 0  # Should have estimated tokens
         assert result["finish_reason"] == "stop"
+        assert result["tool_calls"] is None  # No tool calls
 
     @pytest.mark.asyncio
     async def test_complete_with_metadata_no_candidates(self, vertex_adapter, sample_messages):
@@ -231,6 +235,7 @@ class TestVertexAIAdapterCompleteWithMetadata:
         """Test completion with different finish reason."""
         mock_candidate = Mock()
         mock_candidate.finish_reason.name = "MAX_TOKENS"
+        mock_candidate.content = None  # No tool calls
 
         mock_response = Mock()
         mock_response.text = "Response"
@@ -246,6 +251,7 @@ class TestVertexAIAdapterCompleteWithMetadata:
         )
 
         assert result["finish_reason"] == "max_tokens"
+        assert result["tool_calls"] is None  # No tool calls
 
 
 class TestVertexAIAdapterTokenEstimation:
@@ -320,6 +326,7 @@ class TestVertexAIAdapterTemperature:
 
         mock_response = Mock()
         mock_response.text = "Response"
+        mock_response.candidates = []  # No tool calls
 
         vertex_adapter.client.generate_content_async = AsyncMock(
             return_value=mock_response
@@ -337,3 +344,254 @@ class TestVertexAIAdapterTemperature:
         assert isinstance(generation_config, GenerationConfig)
         # Use approximate comparison due to float32 precision
         assert abs(generation_config._raw_generation_config.temperature - 0.9) < 0.01
+
+
+class TestVertexAIAdapterToolCalling:
+    """Test Vertex AI adapter tool calling functionality."""
+
+    @pytest.fixture
+    def sample_tool(self):
+        """Sample tool definition in OpenAI format."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current weather for a location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "City name",
+                        },
+                        "units": {
+                            "type": "string",
+                            "enum": ["celsius", "fahrenheit"],
+                        },
+                    },
+                    "required": ["location"],
+                },
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_complete_with_tools_no_call(
+        self, vertex_adapter, sample_messages, sample_tool
+    ):
+        """Test complete with tools when LLM doesn't call a tool."""
+        mock_response = Mock()
+        mock_response.text = "The weather is sunny today."
+        mock_response.candidates = []  # No tool calls
+
+        vertex_adapter.client.generate_content_async = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await vertex_adapter.complete(
+            messages=sample_messages,
+            tools=[sample_tool],
+            tenant_id="test-tenant",
+        )
+
+        assert result == "The weather is sunny today."
+
+        # Verify tools were passed to API
+        call_args = vertex_adapter.client.generate_content_async.call_args
+        assert "tools" in call_args[1]
+
+    @pytest.mark.asyncio
+    async def test_complete_with_metadata_tool_call(
+        self, vertex_adapter, sample_messages, sample_tool
+    ):
+        """Test complete_with_metadata when LLM makes a tool call."""
+        # Create mock function call (Vertex AI format)
+        mock_function_call = Mock()
+        mock_function_call.name = "get_weather"
+        mock_function_call.args = {"location": "Paris", "units": "celsius"}
+
+        mock_part = Mock()
+        mock_part.function_call = mock_function_call
+
+        mock_content = Mock()
+        mock_content.parts = [mock_part]
+
+        mock_candidate = Mock()
+        mock_candidate.content = mock_content
+        mock_candidate.finish_reason.name = "STOP"
+
+        mock_response = Mock()
+        mock_response.text = ""
+        mock_response.candidates = [mock_candidate]
+
+        vertex_adapter.client.generate_content_async = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await vertex_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tools=[sample_tool],
+            tenant_id="test-tenant",
+        )
+
+        # Verify result structure
+        assert "content" in result
+        assert "tool_calls" in result
+        assert result["tool_calls"] is not None
+        assert len(result["tool_calls"]) == 1
+
+        # Verify tool call format (converted to OpenAI format)
+        tool_call = result["tool_calls"][0]
+        assert tool_call["type"] == "function"
+        assert tool_call["function"]["name"] == "get_weather"
+        assert '"location": "Paris"' in tool_call["function"]["arguments"]
+        assert '"units": "celsius"' in tool_call["function"]["arguments"]
+
+    @pytest.mark.asyncio
+    async def test_complete_without_tools_backward_compat(
+        self, vertex_adapter, sample_messages
+    ):
+        """Test backward compatibility when no tools are provided."""
+        mock_candidate = Mock()
+        mock_candidate.finish_reason.name = "STOP"
+
+        mock_response = Mock()
+        mock_response.text = "Response without tools"
+        mock_response.candidates = [mock_candidate]
+
+        vertex_adapter.client.generate_content_async = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await vertex_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tenant_id="test-tenant",
+        )
+
+        # Should work without tools parameter
+        assert result["content"] == "Response without tools"
+        assert result["tool_calls"] is None
+
+        # Verify tools were not passed to API
+        call_args = vertex_adapter.client.generate_content_async.call_args
+        assert "tools" not in call_args[1]
+
+    @pytest.mark.asyncio
+    async def test_multiple_tool_calls(
+        self, vertex_adapter, sample_messages, sample_tool
+    ):
+        """Test handling multiple tool calls in one response."""
+        # Create mock function calls
+        mock_fc1 = Mock()
+        mock_fc1.name = "get_weather"
+        mock_fc1.args = {"location": "Paris"}
+
+        mock_fc2 = Mock()
+        mock_fc2.name = "get_weather"
+        mock_fc2.args = {"location": "London"}
+
+        mock_part1 = Mock()
+        mock_part1.function_call = mock_fc1
+
+        mock_part2 = Mock()
+        mock_part2.function_call = mock_fc2
+
+        mock_content = Mock()
+        mock_content.parts = [mock_part1, mock_part2]
+
+        mock_candidate = Mock()
+        mock_candidate.content = mock_content
+        mock_candidate.finish_reason.name = "STOP"
+
+        mock_response = Mock()
+        mock_response.text = ""
+        mock_response.candidates = [mock_candidate]
+
+        vertex_adapter.client.generate_content_async = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await vertex_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tools=[sample_tool],
+            tenant_id="test-tenant",
+        )
+
+        assert result["tool_calls"] is not None
+        assert len(result["tool_calls"]) == 2
+        assert result["tool_calls"][0]["function"]["name"] == "get_weather"
+        assert result["tool_calls"][1]["function"]["name"] == "get_weather"
+
+    @pytest.mark.asyncio
+    async def test_complete_with_tools_empty_content(
+        self, vertex_adapter, sample_messages, sample_tool
+    ):
+        """Test that content can be empty when tool is called."""
+        mock_function_call = Mock()
+        mock_function_call.name = "get_weather"
+        mock_function_call.args = {"location": "Tokyo"}
+
+        mock_part = Mock()
+        mock_part.function_call = mock_function_call
+
+        mock_content = Mock()
+        mock_content.parts = [mock_part]
+
+        mock_candidate = Mock()
+        mock_candidate.content = mock_content
+        mock_candidate.finish_reason.name = "STOP"
+
+        mock_response = Mock()
+        mock_response.text = ""  # Empty content when tool is called
+        mock_response.candidates = [mock_candidate]
+
+        vertex_adapter.client.generate_content_async = AsyncMock(
+            return_value=mock_response
+        )
+
+        result = await vertex_adapter.complete_with_metadata(
+            messages=sample_messages,
+            tools=[sample_tool],
+            tenant_id="test-tenant",
+        )
+
+        # Content should be empty string when tool is called
+        assert result["content"] == ""
+        assert result["tool_calls"] is not None
+
+    @pytest.mark.asyncio
+    async def test_tool_format_conversion(self, vertex_adapter, sample_tool):
+        """Test conversion from OpenAI format to Vertex AI format."""
+        from vertexai.generative_models import Tool
+
+        vertex_tools = vertex_adapter._convert_tools_to_vertex_format([sample_tool])
+
+        # Verify structure
+        assert len(vertex_tools) == 1
+        assert isinstance(vertex_tools[0], Tool)
+        # Tool object created successfully - actual function_declarations are internal
+        # The important part is that Tool() was created without error from our FunctionDeclarations
+
+    def test_extract_tool_calls_no_candidates(self, vertex_adapter):
+        """Test extracting tool calls when response has no candidates."""
+        mock_response = Mock()
+        mock_response.candidates = None
+
+        tool_calls = vertex_adapter._extract_tool_calls(mock_response)
+        assert tool_calls is None
+
+    def test_extract_tool_calls_no_function_call(self, vertex_adapter):
+        """Test extracting tool calls when parts have no function_call."""
+        mock_part = Mock()
+        mock_part.function_call = None
+
+        mock_content = Mock()
+        mock_content.parts = [mock_part]
+
+        mock_candidate = Mock()
+        mock_candidate.content = mock_content
+
+        mock_response = Mock()
+        mock_response.candidates = [mock_candidate]
+
+        tool_calls = vertex_adapter._extract_tool_calls(mock_response)
+        assert tool_calls is None

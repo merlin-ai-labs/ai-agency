@@ -190,11 +190,21 @@ class WeatherAgentFlow(BaseFlow):
             assistant_message = None
 
             try:
-                # Use OpenAI's tool calling API
-                response = await self._call_llm_with_tools(
-                    messages=messages,
+                # Call LLM with tool definitions using adapter interface
+                llm_response = await self.llm.complete_with_metadata(
+                    messages=messages,  # type: ignore
+                    tools=[WEATHER_TOOL_DEFINITION],  # type: ignore
+                    tool_choice="auto",
                     tenant_id=tenant_id,
                 )
+
+                # Convert to expected format
+                response = {
+                    "content": llm_response["content"],
+                    "role": "assistant",
+                }
+                if llm_response.get("tool_calls"):
+                    response["tool_calls"] = llm_response["tool_calls"]
 
                 # Check if LLM wants to call a tool
                 if response.get("tool_calls"):
@@ -270,13 +280,15 @@ class WeatherAgentFlow(BaseFlow):
                         message_metadata={"tool_call_id": tool_call["id"]},
                     )
 
-                    # Step 7: Call LLM again with tool result
-                    final_response = await self._call_llm_with_tools(
-                        messages=messages,
+                    # Step 7: Call LLM again with tool result using adapter interface
+                    final_llm_response = await self.llm.complete_with_metadata(
+                        messages=messages,  # type: ignore
+                        tools=[WEATHER_TOOL_DEFINITION],  # type: ignore
+                        tool_choice="auto",
                         tenant_id=tenant_id,
                     )
 
-                    assistant_message = final_response.get("content", "")
+                    assistant_message = final_llm_response.get("content", "")
 
                 else:
                     # No tool call needed, use LLM response directly
@@ -316,61 +328,6 @@ class WeatherAgentFlow(BaseFlow):
                     },
                 )
                 raise
-
-    async def _call_llm_with_tools(
-        self,
-        messages: list[dict],
-        tenant_id: str,
-    ) -> dict[str, Any]:
-        """Call LLM with tool definitions using OpenAI API.
-
-        This method uses the OpenAI client directly to support tool calling.
-        We need this because our BaseAdapter doesn't have tool support yet.
-
-        Args:
-            messages: Conversation messages
-            tenant_id: Tenant ID for rate limiting
-
-        Returns:
-            Response dict with content and optional tool_calls
-        """
-        # Import OpenAI client from adapter
-        from openai import AsyncOpenAI
-
-        from app.config import settings
-
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-
-        response = await client.chat.completions.create(
-            model=self.llm.model_name,
-            messages=messages,  # type: ignore
-            tools=[WEATHER_TOOL_DEFINITION],  # type: ignore
-            tool_choice="auto",
-            temperature=0.7,
-        )
-
-        message = response.choices[0].message
-
-        result = {
-            "content": message.content or "",
-            "role": "assistant",
-        }
-
-        # Add tool calls if present
-        if message.tool_calls:
-            result["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": tc.type,
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in message.tool_calls
-            ]
-
-        return result
 
     async def validate(self, input_data: dict[str, Any]) -> bool:
         """Validate input data for the flow.

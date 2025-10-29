@@ -48,6 +48,142 @@ class LLMResponse(TypedDict):
     finish_reason: str  # "stop", "length", "content_filter"
 
 
+# Tool calling types (for LLM function calling)
+class ToolFunction(TypedDict):
+    """Function definition for LLM tool calling.
+
+    Defines the schema of a function that an LLM can call.
+    This follows the OpenAI function calling format.
+
+    Example:
+        >>> weather_function: ToolFunction = {
+        ...     "name": "get_weather",
+        ...     "description": "Get current weather for a location",
+        ...     "parameters": {
+        ...         "type": "object",
+        ...         "properties": {
+        ...             "location": {
+        ...                 "type": "string",
+        ...                 "description": "City name"
+        ...             },
+        ...             "units": {
+        ...                 "type": "string",
+        ...                 "enum": ["celsius", "fahrenheit"]
+        ...             }
+        ...         },
+        ...         "required": ["location"]
+        ...     }
+        ... }
+    """
+
+    name: str
+    description: str
+    parameters: dict[str, Any]  # JSON Schema
+
+
+class ToolDefinition(TypedDict):
+    """Complete tool definition for LLM function calling.
+
+    This is the format passed to LLM providers to define available tools.
+    Follows OpenAI's tool definition format.
+
+    Example:
+        >>> weather_tool: ToolDefinition = {
+        ...     "type": "function",
+        ...     "function": {
+        ...         "name": "get_weather",
+        ...         "description": "Get current weather",
+        ...         "parameters": {...}
+        ...     }
+        ... }
+    """
+
+    type: str  # Always "function"
+    function: ToolFunction
+
+
+class ToolCallFunction(TypedDict):
+    """Function call details within a tool call.
+
+    Contains the function name and arguments when LLM decides to call a tool.
+    """
+
+    name: str
+    arguments: str  # JSON string of function arguments
+
+
+class ToolCall(TypedDict):
+    """Tool call request from LLM response.
+
+    When an LLM decides to call a function/tool, it returns this structure.
+    The application must then execute the tool and return results.
+
+    Example:
+        >>> tool_call: ToolCall = {
+        ...     "id": "call_abc123",
+        ...     "type": "function",
+        ...     "function": {
+        ...         "name": "get_weather",
+        ...         "arguments": '{"location": "Paris", "units": "celsius"}'
+        ...     }
+        ... }
+    """
+
+    id: str
+    type: str  # Always "function"
+    function: ToolCallFunction
+
+
+class ToolMessage(TypedDict):
+    """Message containing tool execution result.
+
+    After executing a tool, send this message back to the LLM with the results.
+
+    Example:
+        >>> result_message: ToolMessage = {
+        ...     "role": "tool",
+        ...     "content": '{"temperature": 15, "condition": "sunny"}',
+        ...     "tool_call_id": "call_abc123"
+        ... }
+    """
+
+    role: str  # Always "tool"
+    content: str  # JSON string of tool result
+    tool_call_id: str
+
+
+class LLMResponseWithTools(TypedDict):
+    """LLM response that may include tool calls.
+
+    Extended version of LLMResponse that includes tool_calls field.
+    Used when the LLM wants to call one or more tools.
+
+    Example:
+        >>> response: LLMResponseWithTools = {
+        ...     "content": "",
+        ...     "model": "gpt-4-turbo",
+        ...     "tokens_used": 150,
+        ...     "finish_reason": "tool_calls",
+        ...     "tool_calls": [
+        ...         {
+        ...             "id": "call_abc123",
+        ...             "type": "function",
+        ...             "function": {
+        ...                 "name": "get_weather",
+        ...                 "arguments": '{"location": "Paris"}'
+        ...             }
+        ...         }
+        ...     ]
+        ... }
+    """
+
+    content: str
+    model: str
+    tokens_used: int
+    finish_reason: str
+    tool_calls: list[ToolCall] | None
+
+
 # Tool execution types
 class ToolInput(TypedDict, total=False):
     """Type for tool input parameters.
@@ -109,7 +245,9 @@ class LLMProtocol(Protocol):
         ...         self,
         ...         messages: MessageHistory,
         ...         temperature: float = 0.7,
-        ...         max_tokens: int | None = None
+        ...         max_tokens: int | None = None,
+        ...         tools: list[ToolDefinition] | None = None,
+        ...         tool_choice: str | dict[str, Any] = "auto",
         ...     ) -> str:
         ...         # Implementation
         ...         pass
@@ -123,6 +261,8 @@ class LLMProtocol(Protocol):
         messages: MessageHistory,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> str:
         """Generate a completion from messages.
 
@@ -130,6 +270,8 @@ class LLMProtocol(Protocol):
             messages: Conversation history.
             temperature: Sampling temperature (0.0 to 1.0).
             max_tokens: Maximum tokens to generate.
+            tools: Optional list of tool definitions for function calling.
+            tool_choice: Controls which tool to call ("none", "auto", or specific).
 
         Returns:
             The generated completion text.
@@ -144,16 +286,20 @@ class LLMProtocol(Protocol):
         messages: MessageHistory,
         temperature: float = 0.7,
         max_tokens: int | None = None,
-    ) -> LLMResponse:
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
+    ) -> LLMResponse | LLMResponseWithTools:
         """Generate completion with full response metadata.
 
         Args:
             messages: Conversation history.
             temperature: Sampling temperature (0.0 to 1.0).
             max_tokens: Maximum tokens to generate.
+            tools: Optional list of tool definitions for function calling.
+            tool_choice: Controls which tool to call ("none", "auto", or specific).
 
         Returns:
-            Full LLM response with metadata.
+            Full LLM response with metadata. Includes tool_calls if tools were used.
 
         Raises:
             LLMError: If the API call fails.

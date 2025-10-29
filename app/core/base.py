@@ -11,8 +11,10 @@ from typing import Any
 
 from app.core.types import (
     LLMResponse,
+    LLMResponseWithTools,
     Message,
     MessageHistory,
+    ToolDefinition,
     ToolOutput,
 )
 
@@ -196,6 +198,8 @@ class BaseAdapter(ABC):
         messages: MessageHistory,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> str:
         """Generate a completion from messages.
 
@@ -203,12 +207,41 @@ class BaseAdapter(ABC):
             messages: Conversation history as a list of messages.
             temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative).
             max_tokens: Maximum tokens to generate (None = model default).
+            tools: Optional list of tool definitions for function calling.
+            tool_choice: Controls which tool to call. Can be "none", "auto",
+                or {"type": "function", "function": {"name": "tool_name"}}.
 
         Returns:
             The generated completion text.
 
         Raises:
             LLMError: If the API call fails.
+
+        Note:
+            When tools are provided and the LLM decides to call a tool,
+            the content may be empty. Use complete_with_metadata() to get
+            tool_calls information.
+
+        Example:
+            >>> adapter = get_llm_adapter()
+            >>> tools = [{
+            ...     "type": "function",
+            ...     "function": {
+            ...         "name": "get_weather",
+            ...         "description": "Get weather for a location",
+            ...         "parameters": {
+            ...             "type": "object",
+            ...             "properties": {
+            ...                 "location": {"type": "string"}
+            ...             },
+            ...             "required": ["location"]
+            ...         }
+            ...     }
+            ... }]
+            >>> response = await adapter.complete(
+            ...     messages=[{"role": "user", "content": "Weather in Paris?"}],
+            ...     tools=tools
+            ... )
         """
 
     @abstractmethod
@@ -217,22 +250,57 @@ class BaseAdapter(ABC):
         messages: MessageHistory,
         temperature: float = 0.7,
         max_tokens: int | None = None,
-    ) -> LLMResponse:
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
+    ) -> LLMResponse | LLMResponseWithTools:
         """Generate completion with full response metadata.
 
         Use this when you need token counts, finish reasons, and other
-        metadata beyond just the completion text.
+        metadata beyond just the completion text. This is the recommended
+        method when using tool calling.
 
         Args:
             messages: Conversation history.
             temperature: Sampling temperature.
             max_tokens: Maximum tokens to generate.
+            tools: Optional list of tool definitions for function calling.
+            tool_choice: Controls which tool to call. Can be "none", "auto",
+                or {"type": "function", "function": {"name": "tool_name"}}.
 
         Returns:
-            Full LLM response with metadata.
+            Full LLM response with metadata. If tools are provided and the LLM
+            calls a tool, the response will include a tool_calls field with the
+            list of tool calls to execute.
 
         Raises:
             LLMError: If the API call fails.
+
+        Example with tool calling:
+            >>> adapter = get_llm_adapter()
+            >>> tools = [{
+            ...     "type": "function",
+            ...     "function": {
+            ...         "name": "get_weather",
+            ...         "description": "Get current weather",
+            ...         "parameters": {
+            ...             "type": "object",
+            ...             "properties": {
+            ...                 "location": {"type": "string"}
+            ...             },
+            ...             "required": ["location"]
+            ...         }
+            ...     }
+            ... }]
+            >>> response = await adapter.complete_with_metadata(
+            ...     messages=[{"role": "user", "content": "What's the weather in Paris?"}],
+            ...     tools=tools
+            ... )
+            >>> if response.get("tool_calls"):
+            ...     # LLM wants to call a tool
+            ...     for tool_call in response["tool_calls"]:
+            ...         tool_name = tool_call["function"]["name"]
+            ...         tool_args = json.loads(tool_call["function"]["arguments"])
+            ...         # Execute the tool and return results...
         """
 
     async def create_message(self, role: str, content: str) -> Message:

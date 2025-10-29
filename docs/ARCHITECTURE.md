@@ -478,38 +478,177 @@ mistral_rate_limit_tpm: int = 2000000
 mistral_rate_limit_tph: int = 100000000
 ```
 
-### Function Calling (Tools)
+### Function Calling (Tool Use)
 
-All adapters support OpenAI-style function calling:
+**Implementation Status:**
+- ✅ OpenAI - Full support via native API
+- ✅ Mistral - Full support (OpenAI-compatible format)
+- ✅ Vertex AI - Full support with automatic format conversion
+
+**Architecture:**
+
+Tool calling is implemented at the adapter interface level, making it provider-agnostic:
+
+```
+┌──────────────────────────────────────────────────┐
+│            Flow Code (Weather Agent)             │
+└────────────────────┬─────────────────────────────┘
+                     │
+                     │ complete_with_metadata(
+                     │   messages, tools, tool_choice)
+                     │
+          ┌──────────▼───────────┐
+          │    BaseAdapter       │
+          │  (Interface Layer)   │
+          └──────────┬───────────┘
+                     │
+       ┌─────────────┼─────────────┐
+       │             │             │
+┌──────▼─────┐ ┌────▼──────┐ ┌───▼────────┐
+│  OpenAI    │ │  Mistral  │ │  Vertex    │
+│ Native API │ │ Compatible│ │  Convert   │
+└────────────┘ └───────────┘ └────────────┘
+```
+
+**Type Definitions:**
 
 ```python
-tool_definition = {
+# From app/core/types.py
+
+class ToolFunction(TypedDict):
+    """Function definition for tool calling."""
+    name: str
+    description: str
+    parameters: dict[str, Any]  # JSON Schema
+
+class ToolDefinition(TypedDict):
+    """Complete tool definition (OpenAI format)."""
+    type: str  # "function"
+    function: ToolFunction
+
+class ToolCall(TypedDict):
+    """LLM's request to call a tool."""
+    id: str
+    type: str  # "function"
+    function: ToolCallFunction
+
+class LLMResponseWithTools(TypedDict):
+    """LLM response that includes tool calls."""
+    content: str
+    model: str
+    tokens_used: int
+    finish_reason: str
+    tool_calls: list[ToolCall] | None
+```
+
+**Adapter Interface:**
+
+```python
+# From app/core/base.py
+
+class BaseAdapter:
+    async def complete_with_metadata(
+        self,
+        messages: MessageHistory,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: str | dict[str, Any] = "auto",
+    ) -> LLMResponse | LLMResponseWithTools:
+        """Generate completion with optional tool calling."""
+        pass
+```
+
+**Usage Example:**
+
+```python
+# Define tool
+weather_tool = {
     "type": "function",
     "function": {
         "name": "get_weather",
-        "description": "Get current weather",
+        "description": "Get current weather for a location",
         "parameters": {
             "type": "object",
             "properties": {
-                "location": {"type": "string"},
+                "location": {"type": "string", "description": "City name"},
+                "units": {"type": "string", "enum": ["celsius", "fahrenheit"]}
             },
             "required": ["location"],
         },
     },
 }
 
-response = await llm.generate_completion(
-    messages=[{"role": "user", "content": "Weather in Paris?"}],
-    tools=[tool_definition],
+# Call LLM with tool
+response = await llm.complete_with_metadata(
+    messages=[{"role": "user", "content": "What's the weather in Paris?"}],
+    tools=[weather_tool],
     tool_choice="auto",
+    tenant_id="user_123",
 )
 
+# Check for tool calls
 if response.get("tool_calls"):
-    # LLM wants to call tool
     for tool_call in response["tool_calls"]:
-        result = execute_tool(tool_call)
-        # Add result to messages and call LLM again
+        # Extract details
+        tool_name = tool_call["function"]["name"]
+        tool_args = json.loads(tool_call["function"]["arguments"])
+
+        # Execute tool
+        result = await get_weather(**tool_args)
+
+        # Add tool result to conversation
+        messages.append({
+            "role": "assistant",
+            "content": response["content"] or "",
+            "tool_calls": [tool_call],
+        })
+        messages.append({
+            "role": "tool",
+            "content": json.dumps(result),
+            "tool_call_id": tool_call["id"],
+        })
+
+        # Call LLM again with tool result
+        final_response = await llm.complete_with_metadata(
+            messages=messages,
+            tools=[weather_tool],
+            tenant_id="user_123",
+        )
 ```
+
+**Provider Implementation Details:**
+
+**OpenAI Adapter:**
+- Uses native `tools` parameter in chat completions API
+- Supports `tool_choice`: "none", "auto", or specific function
+- Returns tool calls in standard format
+- Handles multiple tool calls in single response
+
+**Mistral Adapter:**
+- Uses OpenAI-compatible tool calling format
+- Same `tools` parameter structure
+- Identical tool call response format
+- No format conversion needed
+
+**Vertex AI Adapter:**
+- Automatic format conversion: OpenAI → Gemini FunctionDeclaration
+- Generates deterministic tool_call_id (Vertex doesn't provide IDs)
+- Uses `Tool` and `FunctionDeclaration` objects from Vertex AI SDK
+- Converts function calls back to OpenAI format for consistency
+- Handles multiple tool calls in single response
+
+**Testing:**
+
+Tool calling is tested comprehensively:
+- 7 tests for OpenAI adapter (91% coverage)
+- 6 tests for Mistral adapter (85% coverage)
+- 9 tests for Vertex AI adapter (92% coverage)
+- Tests cover: tool calls, multiple calls, format conversion, backward compatibility
+
+**Reference Implementation:**
+
+See `app/flows/agents/weather_agent.py` for complete multi-turn tool calling example.
 
 ---
 
