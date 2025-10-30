@@ -1,0 +1,394 @@
+[
+    {
+      "body": {
+        "userInfo": {
+          "company": "TechVision Analytics",
+          "firstName": "Sarah",
+          "lastName": "Martinez"
+        },
+        "dimensions": [
+          {
+            "dimensionId": "vision-strategy",
+            "dimensionName": "Vision & Strategy",
+            "selfRating": 3,
+            "levelTitle": "Defined",
+            "additionalContext": "Strong leadership commitment and clear vision. Main challenge is coordinating execution across multiple product teams.",
+            "enhancementQA": [
+              {
+                "question": "What are your next 3 years AI priorities?",
+                "answer": "Focus on product intelligence features, automated customer support, and predictive analytics for customer success. We aim to embed AI throughout our product suite."
+              },
+              {
+                "question": "How do you measure AI success?",
+                "answer": "We track customer adoption of AI features, cost savings from automation, and incremental revenue from AI-powered capabilities. Target is 30% of revenue influenced by AI within 3 years."
+              },
+              {
+                "question": "What's your competitive advantage?",
+                "answer": "Our deep domain expertise in analytics combined with proprietary customer behavior data gives us unique training data and context for AI applications."
+              }
+            ]
+          },
+          {
+            "dimensionId": "data-governance",
+            "dimensionName": "Data & Governance",
+            "selfRating": 2,
+            "levelTitle": "Managed",
+            "additionalContext": "Governance is improving but still reactive. Need formal data stewardship program and quality SLAs.",
+            "enhancementQA": [
+              {
+                "question": "What data platform are you building?",
+                "answer": "Implementing Snowflake as central data warehouse. Using dbt for transformations. Still migrating legacy systems."
+              },
+              {
+                "question": "Which governance policies exist?",
+                "answer": "Basic data classification policy and access controls. Privacy policy for customer data. No comprehensive data quality framework yet."
+              },
+              {
+                "question": "How do you measure data quality?",
+                "answer": "Manual spot checks and user-reported issues. Implementing Great Expectations for automated testing. No real-time monitoring yet."
+              }
+            ]
+          },
+          {
+            "dimensionId": "data-quality",
+            "dimensionName": "Data Quality & Reliability",
+            "selfRating": 2,
+            "levelTitle": "Basic Monitoring",
+            "additionalContext": "Quality issues cause downstream problems. Recent incident with incorrect billing due to data error cost significant time to resolve.",
+            "enhancementQA": [
+              {
+                "question": "What data quality checks do you currently have in place?",
+                "answer": "Basic null checks, duplicate detection on key fields. Manual validation for critical reports. No automated alerting system."
+              },
+              {
+                "question": "How often do you validate your most important data?",
+                "answer": "Weekly for customer data, monthly for product usage data. Ad-hoc validation when issues are reported."
+              },
+              {
+                "question": "What data quality tools or processes are you considering?",
+                "answer": "Evaluating Monte Carlo and Great Expectations. Planning to implement data observability within 6 months."
+              }
+            ]
+          },
+          {
+            "dimensionId": "data-architecture",
+            "dimensionName": "Data Architecture & Integration",
+            "selfRating": 3,
+            "levelTitle": "Unified",
+            "additionalContext": "Architecture is solid but needs evolution for ML workloads. Planning feature store implementation in Q3.",
+            "enhancementQA": [
+              {
+                "question": "Describe your current data architecture and how it supports analytics and AI.",
+                "answer": "Modern lakehouse architecture with Snowflake. Structured around domains with event sourcing for real-time data. Well-documented data models."
+              },
+              {
+                "question": "How do you handle real-time vs batch data processing?",
+                "answer": "Kafka for streaming, dbt for batch transformations. Most analytics are batch, but moving critical metrics to real-time."
+              },
+              {
+                "question": "What challenges exist in your data architecture?",
+                "answer": "Legacy systems still on old databases. Data lineage tracking needs improvement. Feature store not yet implemented for ML."
+              }
+            ]
+          },
+          {
+            "dimensionId": "analytics-capabilities",
+            "dimensionName": "Analytics & Insights",
+            "selfRating": 2,
+            "levelTitle": "Self-Service",
+            "additionalContext": "Strong BI foundation but need to move beyond descriptive analytics. Data science team is small but growing.",
+            "enhancementQA": [
+              {
+                "question": "What analytics tools and capabilities do you currently use?",
+                "answer": "Tableau for BI, basic SQL analytics, some Python notebooks for analysis. Limited predictive analytics."
+              },
+              {
+                "question": "How are business stakeholders accessing and using data?",
+                "answer": "Self-service Tableau dashboards for managers. Analysts provide ad-hoc reports. Business users want more self-service capabilities."
+              },
+              {
+                "question": "What advanced analytics are you planning?",
+                "answer": "Customer churn prediction, product recommendation engine, automated anomaly detection for key metrics."
+              }
+            ]
+          },
+          {
+            "dimensionId": "data-engineering",
+            "dimensionName": "Data Engineering & Operations",
+            "selfRating": 3,
+            "levelTitle": "Robust Pipelines",
+            "additionalContext": "Strong engineering practices. Team is experienced and infrastructure is reliable. Need more automation for scaling.",
+            "enhancementQA": [
+              {
+                "question": "Describe your data pipeline and ETL processes.",
+                "answer": "Airflow orchestrates ETL jobs. dbt for transformations. Real-time pipelines with Kafka. Good monitoring and alerting."
+              },
+              {
+                "question": "How do you handle data pipeline failures and monitoring?",
+                "answer": "Automated alerting via PagerDuty. Circuit breakers prevent cascading failures. Weekly pipeline health reviews."
+              },
+              {
+                "question": "What are your biggest data engineering challenges?",
+                "answer": "Scale - processing 100M+ events daily. Data team needs to support more use cases with same headcount."
+              }
+            ]
+          },
+          {
+            "dimensionId": "data-strategy",
+            "dimensionName": "Data Strategy & Value",
+            "selfRating": 2,
+            "levelTitle": "Business Intelligence",
+            "additionalContext": "Strategy is evolving from supporting operations to driving innovation. Need better framework for measuring data ROI.",
+            "enhancementQA": [
+              {
+                "question": "How does your data strategy support business objectives?",
+                "answer": "Data strategy focuses on customer insights and operational efficiency. Still developing formal data-as-a-product approach."
+              },
+              {
+                "question": "What data monetization or value creation opportunities exist?",
+                "answer": "Using data to improve product features and customer success. Exploring anonymized industry benchmarking offerings."
+              },
+              {
+                "question": "How do you prioritize data investments and initiatives?",
+                "answer": "Quarterly planning with business stakeholders. ROI-driven but still learning to quantify data value propositions."
+              }
+            ]
+          },
+          {
+            "dimensionId": "technology-infrastructure",
+            "dimensionName": "Technology & Infrastructure",
+            "selfRating": 3,
+            "levelTitle": "AI-Ready",
+            "additionalContext": "Solid technical foundation. Infrastructure team is competent and follows best practices. Ready for ML scale-up.",
+            "enhancementQA": [
+              {
+                "question": "Describe your current technology stack for data and AI.",
+                "answer": "Cloud-native on AWS. Snowflake, Kafka, Kubernetes. MLOps with MLflow. Modern dev practices with CI/CD."
+              },
+              {
+                "question": "How do you manage scalability and performance?",
+                "answer": "Auto-scaling compute resources. Performance monitoring and optimization. Caching strategies for high-traffic endpoints."
+              },
+              {
+                "question": "What technology investments are planned?",
+                "answer": "Feature store implementation, real-time ML inference platform, improved dev environments for data scientists."
+              }
+            ]
+          },
+          {
+            "dimensionId": "people-skills",
+            "dimensionName": "People & Skills",
+            "selfRating": 2,
+            "levelTitle": "Building",
+            "additionalContext": "Team is capable but small for ambitious plans. Retention is good but hiring is challenging in competitive market.",
+            "enhancementQA": [
+              {
+                "question": "What data and AI talent do you currently have?",
+                "answer": "2 data scientists, 3 data engineers, 1 ML engineer. Strong analysts but need more senior ML expertise."
+              },
+              {
+                "question": "What skill gaps exist in your team?",
+                "answer": "MLOps, deep learning expertise, data product management. Business stakeholders need better data literacy."
+              },
+              {
+                "question": "How are you developing data and AI capabilities?",
+                "answer": "Conference attendance, online training, hiring. Planning formal training program for business users."
+              }
+            ]
+          },
+          {
+            "dimensionId": "processes-operating-model",
+            "dimensionName": "Processes & Operating Model",
+            "selfRating": 2,
+            "levelTitle": "Defined",
+            "additionalContext": "Processes are functional but could be more efficient. Need clearer roles and responsibilities for data products.",
+            "enhancementQA": [
+              {
+                "question": "How do you manage data projects and prioritization?",
+                "answer": "Quarterly planning with stakeholders. Agile methodology for data projects. Still formalizing product management for data."
+              },
+              {
+                "question": "What processes exist for data access and governance?",
+                "answer": "Data access requests through IT. Basic approval workflows. Self-service for known-good datasets."
+              },
+              {
+                "question": "How do you ensure data projects deliver business value?",
+                "answer": "Business sponsorship required for projects. Regular stakeholder check-ins. Still developing better success metrics."
+              }
+            ]
+          },
+          {
+            "dimensionId": "use-cases-value",
+            "dimensionName": "Use Cases & Value Realization",
+            "selfRating": 2,
+            "levelTitle": "Early Value",
+            "additionalContext": "Good foundation of use cases delivering value. Need better tracking of business impact and ROI measurement.",
+            "enhancementQA": [
+              {
+                "question": "What are your current high-value data and AI use cases?",
+                "answer": "Customer segmentation, product analytics, operational dashboards. Piloting churn prediction and recommendation engine."
+              },
+              {
+                "question": "How do you measure and track value from data initiatives?",
+                "answer": "Dashboard adoption metrics, time saved on manual processes. Working on more sophisticated ROI tracking."
+              },
+              {
+                "question": "What new use cases are you prioritizing?",
+                "answer": "AI-powered customer support, predictive maintenance for customers, product intelligence features."
+              }
+            ]
+          },
+          {
+            "dimensionId": "customer-market",
+            "dimensionName": "Customer & Market Impact",
+            "selfRating": 3,
+            "levelTitle": "Customer-Centric",
+            "additionalContext": "Strong customer focus and market awareness. Data-driven approach to customer success is a key differentiator.",
+            "enhancementQA": [
+              {
+                "question": "How do you use data to understand and serve customers?",
+                "answer": "360-degree customer view, usage analytics, NPS tracking. AI-powered insights in customer success workflows."
+              },
+              {
+                "question": "What competitive advantages does your data strategy provide?",
+                "answer": "Real-time customer insights, predictive customer health scoring, data-driven product development cycle."
+              },
+              {
+                "question": "How do you incorporate market feedback into your data strategy?",
+                "answer": "Customer advisory board input, competitor analysis, industry benchmark participation."
+              }
+            ]
+          },
+          {
+            "dimensionId": "risk-ethics-trust",
+            "dimensionName": "Risk, Ethics & Trust",
+            "selfRating": 2,
+            "levelTitle": "Aware",
+            "additionalContext": "Compliance is solid but AI ethics and bias detection need improvement. Working with legal team on AI governance framework.",
+            "enhancementQA": [
+              {
+                "question": "What data privacy and security measures are in place?",
+                "answer": "GDPR compliance, encrypted data storage, role-based access controls. Annual security audits and penetration testing."
+              },
+              {
+                "question": "How do you ensure AI systems are fair and unbiased?",
+                "answer": "Basic bias testing in model development. Code reviews for sensitive features. Need more formal AI ethics framework."
+              },
+              {
+                "question": "What data risk management processes exist?",
+                "answer": "Data retention policies, backup procedures, incident response plan. Monthly risk reviews with security team."
+              }
+            ]
+          },
+          {
+            "dimensionId": "ecosystem-partnerships",
+            "dimensionName": "Ecosystem & Partnerships",
+            "selfRating": 2,
+            "levelTitle": "Vendor-Dependent",
+            "additionalContext": "Good vendor relationships and starting to explore data partnerships. Need strategy for external data monetization.",
+            "enhancementQA": [
+              {
+                "question": "What external data sources or partnerships do you leverage?",
+                "answer": "Industry datasets, weather data for forecasting, customer enrichment data from third parties."
+              },
+              {
+                "question": "How do you collaborate with vendors and technology partners?",
+                "answer": "Regular vendor relationships with Snowflake, AWS. Exploring partnerships with AI/ML startups for specialized capabilities."
+              },
+              {
+                "question": "What data sharing or collaboration opportunities exist?",
+                "answer": "Industry consortiums for benchmarking, academic partnerships for research, customer data collaboration pilots."
+              }
+            ]
+          },
+          {
+            "dimensionId": "culture-change-management",
+            "dimensionName": "Culture & Change Management",
+            "selfRating": 2,
+            "levelTitle": "Aware",
+            "additionalContext": "Culture is generally positive but change management needs to be more systematic and proactive.",
+            "enhancementQA": [
+              {
+                "question": "How is your organization embracing data-driven decision making?",
+                "answer": "Leadership supports data-driven culture. Most teams use data for decisions. Still working on data literacy across organization."
+              },
+              {
+                "question": "What cultural barriers exist for data and AI adoption?",
+                "answer": "Some resistance to automation, concerns about job displacement, traditional decision-making habits in some teams."
+              },
+              {
+                "question": "How do you manage change for data and AI initiatives?",
+                "answer": "Change management specialists involved in major projects. Training programs, clear communication about benefits."
+              }
+            ]
+          },
+          {
+            "dimensionId": "performance-measurement",
+            "dimensionName": "Performance Measurement & KPIs",
+            "selfRating": 2,
+            "levelTitle": "Technical KPIs",
+            "additionalContext": "Measurement exists but could be more sophisticated. Working on standard frameworks for measuring data ROI.",
+            "enhancementQA": [
+              {
+                "question": "How do you measure the success of your data and AI initiatives?",
+                "answer": "Project-level KPIs, user adoption metrics, business impact tracking where possible. Working on better ROI measurement."
+              },
+              {
+                "question": "What key performance indicators do you track?",
+                "answer": "Data quality scores, pipeline SLAs, model performance metrics, business KPIs influenced by data projects."
+              },
+              {
+                "question": "How do you communicate data and AI value to stakeholders?",
+                "answer": "Quarterly business reviews, executive dashboards, success story presentations. Need more consistent value communication."
+              }
+            ]
+          },
+          {
+            "dimensionId": "ai-security-robustness",
+            "dimensionName": "AI Security & Robustness",
+            "selfRating": 2,
+            "levelTitle": "Risk Aware",
+            "additionalContext": "AI security is still developing. Need dedicated focus on AI-specific threats and robustness testing.",
+            "enhancementQA": [
+              {
+                "question": "What security measures protect your AI systems and models?",
+                "answer": "Basic access controls, encrypted model storage, secure API endpoints. Starting to implement model monitoring."
+              },
+              {
+                "question": "How do you ensure AI model reliability and robustness?",
+                "answer": "Model testing in staging, performance monitoring, rollback procedures. Need more sophisticated monitoring."
+              },
+              {
+                "question": "What measures address AI-specific risks like adversarial attacks?",
+                "answer": "Awareness of risks but limited specific protections. Planning security review focused on AI/ML systems."
+              }
+            ]
+          }
+        ],
+        "validationQuestions": {
+          "summary": "Based on your assessment, we need clarity on a few strategic areas.",
+          "questions": [
+            {
+              "question": "What are your top 3 business KPIs that AI initiatives must impact in the next 12 months?",
+              "category": "Success Criteria",
+              "reasoning": "Understanding target KPIs helps prioritize AI initiatives with highest business impact.",
+              "answer": "Revenue growth (15% increase), customer churn reduction (below 8%), and operational efficiency (20% cost savings in support operations)."
+            },
+            {
+              "question": "What's your biggest constraint: budget, timeline, or technical talent?",
+              "category": "Resources",
+              "reasoning": "Identifying primary constraints shapes realistic roadmap and investment priorities.",
+              "answer": "Technical talent is our biggest constraint. We have budget allocated but struggle to hire ML engineers and data scientists with the right skills."
+            },
+            {
+              "question": "What regulatory or compliance requirements must your AI systems meet?",
+              "category": "External Factors",
+              "reasoning": "Compliance requirements significantly impact AI architecture and deployment approach.",
+              "answer": "GDPR compliance for customer data, SOC 2 Type II certification, and industry-specific data residency requirements for European customers."
+            }
+          ]
+        },
+        "submittedAt": "2025-10-01T15:34:48.393Z"
+      }
+    }
+  ]
