@@ -10,16 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
+# Copy dependency files and application code
 COPY pyproject.toml ./
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -e .
-
-# Copy application code
 COPY app/ ./app/
 COPY scripts/ ./scripts/
 COPY alembic.ini ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -e .
 
 # Expose port for Cloud Run (8080 is the default)
 ENV PORT=8080
