@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = ""
     openai_model: str = "gpt-4-turbo-2024-04-09"  # GPT-4.1
+    openai_vision_model: str = "gpt-4o"  # GPT-4o has vision capabilities for document processing
     openai_rate_limit_tpm: int = 90000  # Tokens per minute
     openai_rate_limit_tph: int = 5000000  # Tokens per hour
 
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     # Mistral Configuration
     mistral_api_key: str = ""
     mistral_model: str = "mistral-medium-latest"  # Mistral medium-3
+    mistral_vision_model: str = "pixtral-large-latest"  # Pixtral for document processing
     mistral_rate_limit_tpm: int = 2000000  # Tokens per minute
     mistral_rate_limit_tph: int = 100000000  # Tokens per hour
 

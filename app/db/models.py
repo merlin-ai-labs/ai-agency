@@ -31,6 +31,7 @@ class FlowType(str, Enum):
     SLACK = "slack"
     MATURITY_ASSESSMENT = "maturity_assessment"
     USECASE_GROOMING = "usecase_grooming"
+    INVOICE_MANAGER = "invoice_manager"
 
 
 class Run(SQLModel, table=True):

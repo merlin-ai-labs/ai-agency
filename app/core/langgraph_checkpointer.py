@@ -11,7 +11,6 @@ from typing import Any
 from langgraph.checkpoint.postgres import PostgresSaver
 
 from app.config import settings
-from app.db.base import get_engine
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +42,25 @@ class TenantAwarePostgresSaver(PostgresSaver):
             tenant_id: Tenant ID for isolating checkpoints.
             **kwargs: Additional arguments passed to PostgresSaver.
         """
-        # Use existing database engine
-        engine = get_engine()
+        # Fixed: Pass connection string directly to PostgresSaver
+        # This allows PostgresSaver to manage the connection lifecycle properly
+        db_url = settings.database_url
 
-        # Initialize parent with engine
+        # Convert async URL to sync if needed (PostgresSaver expects psycopg sync driver)
+        if "+asyncpg" in db_url:
+            db_url = db_url.replace("+asyncpg", "+psycopg")
+        elif "postgresql://" in db_url and "+psycopg" not in db_url:
+            db_url = db_url.replace("postgresql://", "postgresql+psycopg://")
+
+        # Initialize parent with connection string
+        # PostgresSaver will create and manage its own connection pool
         super().__init__(
-            engine=engine,
+            conn=db_url,  # Pass connection string, not raw connection
             **kwargs,
         )
 
         self.tenant_id = tenant_id
+        self._db_url = db_url
 
         logger.info(
             "Initialized TenantAwarePostgresSaver",
@@ -70,20 +78,26 @@ class TenantAwarePostgresSaver(PostgresSaver):
 
         Returns:
             Filter dictionary with tenant_id added.
+
+        TODO (Wave 3): Implement tenant filtering in checkpoint queries
+        ------------------------------------------------------------
+        Currently, checkpoints are NOT filtered by tenant_id at the database query level.
+        Tenant isolation is enforced at the application level by:
+        1. Including tenant_id in the thread_id (conversation_id)
+        2. Using tenant-specific checkpointer instances
+
+        For full tenant isolation in Wave 3:
+        - Store tenant_id in checkpoint metadata
+        - Filter all checkpoint queries by tenant_id
+        - Add database index on (tenant_id, thread_id) for performance
+        - Implement checkpoint cleanup jobs per tenant
+
+        Current security posture:
+        - Low risk: Thread IDs are UUIDs (hard to guess)
+        - Application-level isolation prevents cross-tenant access in normal flows
+        - Direct database access could bypass isolation (admin only)
         """
-        if self.tenant_id:
-            # Add tenant_id to checkpoint metadata filter
-            # LangGraph stores custom metadata in checkpoint_data
-            # We'll store tenant_id there
-            if "checkpoint_data" not in filter_dict:
-                filter_dict["checkpoint_data"] = {}
-
-            # Note: This is a simplified approach. In practice, we'll need to
-            # filter checkpoints by adding tenant_id to the checkpoint metadata
-            # when saving, and filtering by it when loading.
-            # The actual filtering will be done in the checkpoint repository.
-            pass
-
+        # Placeholder - not implemented yet
         return filter_dict
 
 

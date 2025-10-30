@@ -256,6 +256,27 @@ class ConversationRepository:
         """
         return self.get_conversation(conversation_id) is not None
 
+    def conversation_exists_for_tenant(self, conversation_id: str, tenant_id: str) -> bool:
+        """Check if conversation exists and belongs to tenant.
+
+        Args:
+            conversation_id: UUID of the conversation
+            tenant_id: Tenant identifier
+
+        Returns:
+            True if conversation exists and belongs to tenant, False otherwise
+
+        Security:
+            This method enforces tenant isolation by validating that the conversation
+            belongs to the specified tenant before allowing access.
+        """
+        conversation = self.session.exec(
+            select(Conversation)
+            .where(Conversation.conversation_id == conversation_id)
+            .where(Conversation.tenant_id == tenant_id)
+        ).first()
+        return conversation is not None
+
     def delete_conversation(self, conversation_id: str) -> bool:
         """Delete a conversation and all its messages.
 

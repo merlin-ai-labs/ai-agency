@@ -5,6 +5,7 @@ Provides:
 - POST /runs — Create and enqueue a new flow execution
 - GET /runs/{run_id} — Retrieve run status and results
 - POST /weather-chat — Weather agent chat endpoint
+- Invoice Manager endpoints (imported from flows.invoice_manager.api)
 
 TODO:
 - Wire up database session management
@@ -20,6 +21,19 @@ from pydantic import BaseModel
 
 from app.flows.agents.weather_agent import WeatherAgentFlow
 
+# Import invoice manager endpoints and register routes
+from app.flows.invoice_manager.api import (
+    CapabilitiesResponse,
+    InvoiceManagerRunRequest,
+    InvoiceManagerRunResponse,
+    InvoiceSearchRequest,
+    InvoiceSearchResponse,
+    get_capabilities,
+    run_invoice_manager,
+    search_invoices_endpoint,
+    upload_invoice_file,
+)
+
 logger = structlog.get_logger()
 
 app = FastAPI(
@@ -27,6 +41,12 @@ app = FastAPI(
     description="Lean AI agents platform for maturity assessment and use-case grooming",
     version="0.1.0",
 )
+
+# Register invoice manager routes
+app.post("/api/v1/invoice-manager/run", response_model=InvoiceManagerRunResponse)(run_invoice_manager)
+app.get("/api/v1/invoice-manager/capabilities", response_model=CapabilitiesResponse)(get_capabilities)
+app.post("/api/v1/invoice-manager/search", response_model=InvoiceSearchResponse)(search_invoices_endpoint)
+app.post("/api/v1/invoice-manager/upload")(upload_invoice_file)
 
 
 class RunRequest(BaseModel):
