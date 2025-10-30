@@ -5,9 +5,11 @@ with our existing PostgreSQL database and adds tenant isolation to ensure
 multi-tenancy security.
 """
 
+import asyncio
 import logging
 from typing import Any
 
+from langgraph.checkpoint.base import CheckpointTuple, RunnableConfig
 from langgraph.checkpoint.postgres import PostgresSaver
 
 from app.config import settings
@@ -68,6 +70,79 @@ class TenantAwarePostgresSaver(PostgresSaver):
                 "tenant_id": tenant_id,
                 "database_url": settings.database_url.split("@")[-1] if "@" in settings.database_url else "local",
             },
+        )
+
+    # Async method implementations
+    # PostgresSaver v3.0.0 has async method stubs that raise NotImplementedError
+    # We implement them here by wrapping sync methods with asyncio.to_thread()
+
+    async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
+        """Asynchronously fetch a checkpoint tuple.
+
+        Wraps the synchronous get_tuple method using asyncio.to_thread().
+
+        Args:
+            config: Configuration specifying which checkpoint to retrieve.
+
+        Returns:
+            The requested checkpoint tuple, or None if not found.
+        """
+        return await asyncio.to_thread(self.get_tuple, config)
+
+    async def alist(
+        self,
+        config: RunnableConfig | None = None,
+        *,
+        filter: dict[str, Any] | None = None,
+        before: RunnableConfig | None = None,
+        limit: int | None = None,
+    ) -> list[CheckpointTuple]:
+        """Asynchronously list checkpoints.
+
+        Wraps the synchronous list method using asyncio.to_thread().
+        """
+        return await asyncio.to_thread(
+            self.list,
+            config=config,
+            filter=filter,
+            before=before,
+            limit=limit,
+        )
+
+    async def aput(
+        self,
+        config: RunnableConfig,
+        checkpoint: dict[str, Any],
+        metadata: dict[str, Any],
+        new_versions: dict[str, Any],
+    ) -> RunnableConfig:
+        """Asynchronously store a checkpoint.
+
+        Wraps the synchronous put method using asyncio.to_thread().
+        """
+        return await asyncio.to_thread(
+            self.put,
+            config=config,
+            checkpoint=checkpoint,
+            metadata=metadata,
+            new_versions=new_versions,
+        )
+
+    async def aput_writes(
+        self,
+        config: RunnableConfig,
+        writes: list[tuple[str, Any]],
+        task_id: str,
+    ) -> None:
+        """Asynchronously store intermediate writes.
+
+        Wraps the synchronous put_writes method using asyncio.to_thread().
+        """
+        return await asyncio.to_thread(
+            self.put_writes,
+            config=config,
+            writes=writes,
+            task_id=task_id,
         )
 
     def _add_tenant_filter(self, filter_dict: dict[str, Any]) -> dict[str, Any]:
