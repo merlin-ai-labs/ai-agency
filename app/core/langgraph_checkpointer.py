@@ -11,6 +11,7 @@ from typing import Any
 
 from langgraph.checkpoint.base import CheckpointTuple, RunnableConfig
 from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import ConnectionPool
 
 from app.config import settings
 
@@ -26,12 +27,16 @@ class TenantAwarePostgresSaver(PostgresSaver):
 
     Attributes:
         default_tenant_id: Default tenant ID to use when not specified.
+        _pool: Shared connection pool for all checkpointer instances.
 
     Example:
         >>> checkpointer = get_langgraph_checkpointer(tenant_id="tenant_123")
         >>> graph = StateGraph(...)
         >>> app = graph.compile(checkpointer=checkpointer)
     """
+
+    # Class-level connection pool shared across instances
+    _pool: ConnectionPool | None = None
 
     def __init__(
         self,
@@ -44,8 +49,7 @@ class TenantAwarePostgresSaver(PostgresSaver):
             tenant_id: Tenant ID for isolating checkpoints.
             **kwargs: Additional arguments passed to PostgresSaver.
         """
-        # Fixed: Pass connection string directly to PostgresSaver
-        # This allows PostgresSaver to manage the connection lifecycle properly
+        # Get database URL
         db_url = settings.database_url
 
         # Convert async URL to sync if needed (PostgresSaver expects psycopg sync driver)
@@ -54,15 +58,22 @@ class TenantAwarePostgresSaver(PostgresSaver):
         elif "postgresql://" in db_url and "+psycopg" not in db_url:
             db_url = db_url.replace("postgresql://", "postgresql+psycopg://")
 
-        # Initialize parent with connection string
-        # PostgresSaver will create and manage its own connection pool
+        # Create shared connection pool if it doesn't exist
+        if TenantAwarePostgresSaver._pool is None:
+            logger.info("Creating PostgreSQL connection pool for checkpointer")
+            TenantAwarePostgresSaver._pool = ConnectionPool(
+                conninfo=db_url,
+                min_size=1,
+                max_size=10,
+            )
+
+        # Initialize parent with connection pool
         super().__init__(
-            conn=db_url,  # Pass connection string, not raw connection
+            conn=TenantAwarePostgresSaver._pool,
             **kwargs,
         )
 
         self.tenant_id = tenant_id
-        self._db_url = db_url
 
         logger.info(
             "Initialized TenantAwarePostgresSaver",
