@@ -52,11 +52,12 @@ class TenantAwarePostgresSaver(PostgresSaver):
         # Get database URL
         db_url = settings.database_url
 
-        # Convert async URL to sync if needed (PostgresSaver expects psycopg sync driver)
+        # Convert to standard PostgreSQL URL (remove SQLAlchemy driver prefixes)
+        # ConnectionPool expects standard PostgreSQL URLs, not SQLAlchemy-style URLs
         if "+asyncpg" in db_url:
-            db_url = db_url.replace("+asyncpg", "+psycopg")
-        elif "postgresql://" in db_url and "+psycopg" not in db_url:
-            db_url = db_url.replace("postgresql://", "postgresql+psycopg://")
+            db_url = db_url.replace("+asyncpg", "")
+        if "+psycopg" in db_url:
+            db_url = db_url.replace("+psycopg", "")
 
         # Create shared connection pool if it doesn't exist
         if TenantAwarePostgresSaver._pool is None:
@@ -65,6 +66,7 @@ class TenantAwarePostgresSaver(PostgresSaver):
                 conninfo=db_url,
                 min_size=1,
                 max_size=10,
+                timeout=30,
             )
 
         # Initialize parent with connection pool
