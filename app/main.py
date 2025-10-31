@@ -8,17 +8,18 @@ Provides:
 - Invoice Manager endpoints (imported from flows.invoice_manager.api)
 
 TODO:
-- Wire up database session management
 - Add authentication/API key middleware
 - Add request validation with Pydantic models
 """
 
+from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from app.core.langgraph_checkpointer import TenantAwarePostgresSaver
 from app.flows.agents.weather_agent import WeatherAgentFlow
 
 # Import invoice manager endpoints and register routes
@@ -36,21 +37,58 @@ from app.flows.invoice_manager.api import (
 
 logger = structlog.get_logger()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan context manager for startup/shutdown events.
+
+    Startup:
+    - Connection pools are created lazily (on first use)
+    - SQLAlchemy engine manages its own pool lifecycle
+    - LangGraph checkpointer pool created on first checkpointer instance
+
+    Shutdown:
+    - Close LangGraph checkpointer pool if it was created
+    - SQLAlchemy engine cleanup handled automatically
+    """
+    # Startup
+    logger.info("application_startup", service="ai-agency")
+
+    yield
+
+    # Shutdown
+    logger.info("application_shutdown", service="ai-agency")
+
+    # Close LangGraph checkpointer pool if it exists
+    if TenantAwarePostgresSaver._pool is not None:
+        logger.info("closing_langgraph_checkpointer_pool")
+        TenantAwarePostgresSaver._pool.close()
+        logger.info("langgraph_checkpointer_pool_closed")
+
+
 app = FastAPI(
     title="AI Agency",
     description="Lean AI agents platform for maturity assessment and use-case grooming",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Register invoice manager routes
-app.post("/api/v1/invoice-manager/run", response_model=InvoiceManagerRunResponse)(run_invoice_manager)
-app.get("/api/v1/invoice-manager/capabilities", response_model=CapabilitiesResponse)(get_capabilities)
-app.post("/api/v1/invoice-manager/search", response_model=InvoiceSearchResponse)(search_invoices_endpoint)
+app.post("/api/v1/invoice-manager/run", response_model=InvoiceManagerRunResponse)(
+    run_invoice_manager
+)
+app.get("/api/v1/invoice-manager/capabilities", response_model=CapabilitiesResponse)(
+    get_capabilities
+)
+app.post("/api/v1/invoice-manager/search", response_model=InvoiceSearchResponse)(
+    search_invoices_endpoint
+)
 app.post("/api/v1/invoice-manager/upload")(upload_invoice_file)
 
 
 class RunRequest(BaseModel):
     """Request to create a new flow execution."""
+
     flow_name: str  # e.g., "maturity_assessment" or "usecase_grooming"
     tenant_id: str
     input_data: dict[str, Any]
@@ -58,6 +96,7 @@ class RunRequest(BaseModel):
 
 class RunResponse(BaseModel):
     """Response with run ID and initial status."""
+
     run_id: str
     status: str  # "queued", "running", "completed", "failed"
     message: str | None = None
@@ -65,6 +104,7 @@ class RunResponse(BaseModel):
 
 class WeatherChatRequest(BaseModel):
     """Request to chat with weather agent."""
+
     message: str
     tenant_id: str = "default"
     conversation_id: str | None = None
@@ -72,6 +112,7 @@ class WeatherChatRequest(BaseModel):
 
 class WeatherChatResponse(BaseModel):
     """Response from weather agent."""
+
     response: str
     conversation_id: str
     tool_used: bool
@@ -80,14 +121,49 @@ class WeatherChatResponse(BaseModel):
 
 @app.get("/healthz")
 async def healthz():
-    """Health check endpoint for Cloud Run."""
+    """Health check endpoint for Cloud Run.
+
+    Basic health check that doesn't test database connectivity.
+    Used by Cloud Run for fast startup/liveness checks.
+    """
     return {"status": "ok", "service": "ai-agency"}
 
 
 @app.get("/health")
 async def health():
-    """Alternative health check endpoint."""
-    return {"status": "ok", "service": "ai-agency"}
+    """Comprehensive health check with database status.
+
+    Returns:
+        - status: "ok" or "degraded"
+        - service: "ai-agency"
+        - database: "connected" or "error"
+        - database_error: error message if database check fails
+    """
+    from sqlmodel import Session, select
+
+    from app.db.base import get_session
+    from app.db.models import Tenant
+
+    health_status = {
+        "status": "ok",
+        "service": "ai-agency",
+        "database": "unknown",
+    }
+
+    # Test database connectivity
+    try:
+        with Session(get_session()) as session:
+            # Simple query to test connection
+            result = session.exec(select(Tenant).limit(1)).first()
+            health_status["database"] = "connected"
+            logger.info("health_check_database_ok")
+    except Exception as e:
+        health_status["status"] = "degraded"
+        health_status["database"] = "error"
+        health_status["database_error"] = str(e)
+        logger.error("health_check_database_failed", error=str(e))
+
+    return health_status
 
 
 @app.post("/runs", response_model=RunResponse)
@@ -203,4 +279,5 @@ async def weather_chat(req: WeatherChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -2,7 +2,7 @@
 
 Import all models here so Alembic can detect them for autogeneration.
 
-Uses psycopg ConnectionPool for PostgreSQL connections.
+Uses SQLAlchemy's native connection pooling with psycopg3 driver for PostgreSQL.
 """
 
 import logging
@@ -18,45 +18,12 @@ logger = logging.getLogger(__name__)
 
 # Lazy initialization
 _engine: Engine | None = None
-_pool: "ConnectionPool | None" = None  # Type hint as string to avoid import at module level
-
-
-def get_connection_pool():
-    """Get or create psycopg connection pool for PostgreSQL.
-
-    Returns:
-        ConnectionPool for PostgreSQL, None for SQLite.
-    """
-    global _pool
-
-    # Only create pool for PostgreSQL, not SQLite
-    if "sqlite" in settings.database_url:
-        return None
-
-    if _pool is None:
-        from psycopg_pool import ConnectionPool
-
-        # Strip SQLAlchemy driver suffix
-        db_url = settings.database_url.replace("+psycopg", "").replace("+asyncpg", "")
-
-        logger.info("Creating psycopg ConnectionPool for main application")
-
-        _pool = ConnectionPool(
-            conninfo=db_url,
-            min_size=2,
-            max_size=20,
-            timeout=30,
-        )
-
-        logger.info("Successfully created main application ConnectionPool")
-
-    return _pool
 
 
 def get_engine() -> Engine:
     """Get or create database engine.
 
-    For PostgreSQL: Uses psycopg ConnectionPool with SQLAlchemy's creator pattern.
+    For PostgreSQL: Uses SQLAlchemy's native connection pooling.
     For SQLite: Uses standard SQLAlchemy engine for testing.
 
     Returns:
@@ -65,21 +32,22 @@ def get_engine() -> Engine:
     global _engine
 
     if _engine is None:
-        pool = get_connection_pool()
-
-        if pool is not None:
-            # PostgreSQL: Use psycopg ConnectionPool with SQLAlchemy
-            logger.info("Creating SQLAlchemy engine with psycopg ConnectionPool")
-
-            def getconn():
-                """Get connection from psycopg pool."""
-                return pool.getconn()
+        if "sqlite" not in settings.database_url:
+            # PostgreSQL: Use SQLAlchemy's native pool management
+            # This works correctly with both Unix sockets (production) and TCP (local proxy)
+            logger.info("Creating SQLAlchemy engine with native pool for PostgreSQL")
 
             _engine = create_engine(
-                "postgresql+psycopg://",  # Specify psycopg3 dialect, connection via creator
-                creator=getconn,
+                settings.database_url,  # Already has +psycopg
+                pool_size=10,  # Reduced from 20 for Cloud Run limits
+                max_overflow=5,  # Additional connections when pool exhausted
+                pool_pre_ping=True,  # Verify connections before using
+                pool_recycle=3600,  # Recycle connections after 1 hour
+                pool_timeout=30,  # Wait 30s for available connection
                 echo=settings.environment == "development",
             )
+
+            logger.info("Successfully created PostgreSQL engine with pool_size=10, max_overflow=5")
         else:
             # SQLite: Standard engine for local testing
             logger.info("Creating SQLAlchemy engine for SQLite")
@@ -126,7 +94,6 @@ __all__ = [
     "RunStatus",
     "Tenant",
     "WeatherApiCall",
-    "get_connection_pool",
     "get_engine",
     "get_session",
     "create_db_and_tables",

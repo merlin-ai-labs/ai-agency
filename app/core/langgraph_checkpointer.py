@@ -97,7 +97,7 @@ class TenantAwarePostgresSaver(PostgresSaver):
             pool = ConnectionPool(
                 conninfo=db_url,
                 min_size=1,
-                max_size=10,
+                max_size=5,  # Reduced from 10 for Cloud Run limits
                 timeout=30,
                 kwargs={
                     # Enable autocommit for checkpoint operations
@@ -106,7 +106,7 @@ class TenantAwarePostgresSaver(PostgresSaver):
                     "row_factory": psycopg.rows.dict_row,
                 },
             )
-            logger.info("Successfully created psycopg ConnectionPool")
+            logger.info("Successfully created psycopg ConnectionPool (min_size=1, max_size=5)")
             return pool
         except Exception as e:
             logger.error(f"Failed to create ConnectionPool: {e}")
@@ -286,4 +286,3 @@ def create_checkpointer_config(
     }
 
     return config
-
