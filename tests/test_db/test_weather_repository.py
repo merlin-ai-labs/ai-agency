@@ -300,9 +300,7 @@ class TestWeatherRepositoryGetCallsByLocation:
         for call in calls:
             assert call.location == "London"
 
-    def test_get_calls_by_location_filters_other_locations(
-        self, repository, sample_weather_data
-    ):
+    def test_get_calls_by_location_filters_other_locations(self, repository, sample_weather_data):
         """Test that it only returns calls for the specified location."""
         repository.create_call(
             tenant_id="test-tenant",
@@ -339,9 +337,7 @@ class TestWeatherRepositoryGetCallsByLocation:
         assert len(paris_calls) == 1
         assert paris_calls[0].location == "Paris"
 
-    def test_get_calls_by_location_time_window(
-        self, repository, test_session, sample_weather_data
-    ):
+    def test_get_calls_by_location_time_window(self, repository, test_session, sample_weather_data):
         """Test that time window filtering works."""
         # Create an old call (manually set created_at)
         old_call = WeatherApiCall(
@@ -387,9 +383,7 @@ class TestWeatherRepositoryGetCallsByLocation:
         # Should get both calls
         assert len(calls) == 2
 
-    def test_get_calls_by_location_only_successful(
-        self, repository, sample_weather_data
-    ):
+    def test_get_calls_by_location_only_successful(self, repository, sample_weather_data):
         """Test that it only returns successful calls."""
         repository.create_call(
             tenant_id="test-tenant",
@@ -552,9 +546,7 @@ class TestWeatherRepositoryGetCallStats:
         assert stats["total_calls"] == 5
         assert stats["unique_locations"] == 2  # London and Paris
 
-    def test_get_call_stats_time_window(
-        self, repository, test_session, sample_weather_data
-    ):
+    def test_get_call_stats_time_window(self, repository, test_session, sample_weather_data):
         """Test that time window filtering works for stats."""
         # Create an old call
         old_call = WeatherApiCall(

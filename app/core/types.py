@@ -11,9 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
 # JSON-like data structures
-JSONValue: TypeAlias = (
-    str | int | float | bool | None | dict[str, "JSONValue"] | list["JSONValue"]
-)
+JSONValue: TypeAlias = str | int | float | bool | None | dict[str, "JSONValue"] | list["JSONValue"]
 """Type alias for JSON-compatible values."""
 
 JSONDict: TypeAlias = dict[str, JSONValue]

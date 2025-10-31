@@ -175,4 +175,3 @@ async def get_invoice_metadata(
             "result": None,
             "error": str(e),
         }
-

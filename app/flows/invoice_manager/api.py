@@ -37,7 +37,9 @@ class InvoiceManagerRunRequest(BaseModel):
     tenant_id: str
     conversation_id: str | None = None
     invoice_file_path: str | None = None  # Path to uploaded invoice file
-    provider: str | None = None  # LLM provider ("openai", "vertex", "mistral"). If None, uses settings default
+    provider: str | None = (
+        None  # LLM provider ("openai", "vertex", "mistral"). If None, uses settings default
+    )
     model: str | None = None  # LLM model name. If None, uses provider default
 
 

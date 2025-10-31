@@ -139,11 +139,13 @@ class LangGraphToolAdapter(LangChainBaseTool):
                 output = json.dumps(result["result"])
             else:
                 # Include error in output
-                output = json.dumps({
-                    "success": False,
-                    "error": result.get("error"),
-                    "result": result.get("result"),
-                })
+                output = json.dumps(
+                    {
+                        "success": False,
+                        "error": result.get("error"),
+                        "result": result.get("result"),
+                    }
+                )
 
             logger.debug(
                 f"Tool execution completed: {self._tool.name}",
@@ -188,11 +190,7 @@ class LangGraphToolAdapter(LangChainBaseTool):
 
     def __repr__(self) -> str:
         """Return string representation for debugging."""
-        return (
-            f"LangGraphToolAdapter("
-            f"tool={self._tool.name!r}, "
-            f"version={self._tool.version!r})"
-        )
+        return f"LangGraphToolAdapter(tool={self._tool.name!r}, version={self._tool.version!r})"
 
 
 class LangGraphFunctionToolAdapter(LangChainBaseTool):
@@ -309,11 +307,13 @@ class LangGraphFunctionToolAdapter(LangChainBaseTool):
             if hasattr(self._func, "__call__"):
                 # Check if function is async
                 import inspect
+
                 if inspect.iscoroutinefunction(self._func):
                     result = await self._func(**kwargs)
                 else:
                     # Sync function - wrap in awaitable
                     import asyncio
+
                     result = await asyncio.to_thread(self._func, **kwargs)
             else:
                 msg = f"Function {self.name} is not callable"
@@ -326,11 +326,13 @@ class LangGraphFunctionToolAdapter(LangChainBaseTool):
                     if result["success"]:
                         output = json.dumps(result.get("result", result))
                     else:
-                        output = json.dumps({
-                            "success": False,
-                            "error": result.get("error"),
-                            "result": result.get("result"),
-                        })
+                        output = json.dumps(
+                            {
+                                "success": False,
+                                "error": result.get("error"),
+                                "result": result.get("result"),
+                            }
+                        )
                 else:
                     # Regular dict result
                     output = json.dumps(result)
@@ -377,11 +379,7 @@ class LangGraphFunctionToolAdapter(LangChainBaseTool):
 
     def __repr__(self) -> str:
         """Return string representation for debugging."""
-        return (
-            f"LangGraphFunctionToolAdapter("
-            f"func={self.name!r}, "
-            f"name={self.name!r})"
-        )
+        return f"LangGraphFunctionToolAdapter(func={self.name!r}, name={self.name!r})"
 
 
 def create_langgraph_tool(
@@ -422,4 +420,3 @@ def create_langgraph_tool(
     else:
         msg = f"Unsupported tool type: {type(tool)}"
         raise ValueError(msg)
-

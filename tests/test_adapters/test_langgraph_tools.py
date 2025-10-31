@@ -56,6 +56,7 @@ def langgraph_tool_adapter(mock_tool):
 @pytest.fixture
 def mock_function():
     """Create mock function tool."""
+
     async def test_func(**kwargs: any) -> dict[str, any]:
         return {"success": True, "result": "function_result"}
 
@@ -107,6 +108,7 @@ class TestLangGraphToolAdapterRun:
     @pytest.mark.asyncio
     async def test_arun_error_handling(self, mock_tool):
         """Test error handling."""
+
         # Create a tool that raises an exception
         class FailingTool(MockBaseTool):
             async def execute(self, **kwargs: any) -> ToolOutput:
@@ -124,6 +126,7 @@ class TestLangGraphToolAdapterRun:
     @pytest.mark.asyncio
     async def test_arun_tool_failure(self, mock_tool):
         """Test handling of tool execution failure."""
+
         # Create a tool that returns failure
         class FailingTool(MockBaseTool):
             async def execute(self, **kwargs: any) -> ToolOutput:
@@ -182,6 +185,7 @@ class TestLangGraphFunctionToolAdapter:
     @pytest.mark.asyncio
     async def test_arun_with_sync_function(self):
         """Test execution with sync function."""
+
         def sync_func(**kwargs: any) -> dict[str, any]:
             return {"result": "sync_result"}
 
@@ -200,6 +204,7 @@ class TestLangGraphFunctionToolAdapter:
     @pytest.mark.asyncio
     async def test_arun_with_tool_output_format(self):
         """Test execution with ToolOutput format."""
+
         async def tool_output_func(**kwargs: any) -> dict[str, any]:
             return {
                 "success": True,
@@ -271,4 +276,3 @@ class TestCreateLangGraphTool:
 
         assert isinstance(result, LangGraphToolAdapter)
         assert result.tenant_id == "tenant_123"
-

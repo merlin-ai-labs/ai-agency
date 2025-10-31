@@ -21,4 +21,3 @@ __all__ = [
     "search_invoices",
     "get_invoice_metadata",
 ]
-

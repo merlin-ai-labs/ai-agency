@@ -201,4 +201,3 @@ class RenameInvoiceTool(BaseTool):
             return False
 
         return True
-

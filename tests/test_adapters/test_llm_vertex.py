@@ -112,9 +112,7 @@ class TestVertexAIAdapterComplete:
         mock_response.text = "Python is a programming language."
         mock_response.candidates = []  # No tool calls
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete(
             messages=sample_messages,
@@ -134,9 +132,7 @@ class TestVertexAIAdapterComplete:
         mock_response.text = "Python is great."
         mock_response.candidates = []  # No tool calls
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete(
             messages=sample_messages,
@@ -194,9 +190,7 @@ class TestVertexAIAdapterCompleteWithMetadata:
         mock_response.text = "Python is a language."
         mock_response.candidates = [mock_candidate]
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -216,9 +210,7 @@ class TestVertexAIAdapterCompleteWithMetadata:
         mock_response.text = "Response"
         mock_response.candidates = None
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -241,9 +233,7 @@ class TestVertexAIAdapterCompleteWithMetadata:
         mock_response.text = "Response"
         mock_response.candidates = [mock_candidate]
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -328,9 +318,7 @@ class TestVertexAIAdapterTemperature:
         mock_response.text = "Response"
         mock_response.candidates = []  # No tool calls
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         await vertex_adapter.complete(
             messages=sample_messages,
@@ -375,17 +363,13 @@ class TestVertexAIAdapterToolCalling:
         }
 
     @pytest.mark.asyncio
-    async def test_complete_with_tools_no_call(
-        self, vertex_adapter, sample_messages, sample_tool
-    ):
+    async def test_complete_with_tools_no_call(self, vertex_adapter, sample_messages, sample_tool):
         """Test complete with tools when LLM doesn't call a tool."""
         mock_response = Mock()
         mock_response.text = "The weather is sunny today."
         mock_response.candidates = []  # No tool calls
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete(
             messages=sample_messages,
@@ -423,9 +407,7 @@ class TestVertexAIAdapterToolCalling:
         mock_response.text = ""
         mock_response.candidates = [mock_candidate]
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -447,9 +429,7 @@ class TestVertexAIAdapterToolCalling:
         assert '"units": "celsius"' in tool_call["function"]["arguments"]
 
     @pytest.mark.asyncio
-    async def test_complete_without_tools_backward_compat(
-        self, vertex_adapter, sample_messages
-    ):
+    async def test_complete_without_tools_backward_compat(self, vertex_adapter, sample_messages):
         """Test backward compatibility when no tools are provided."""
         mock_candidate = Mock()
         mock_candidate.finish_reason.name = "STOP"
@@ -458,9 +438,7 @@ class TestVertexAIAdapterToolCalling:
         mock_response.text = "Response without tools"
         mock_response.candidates = [mock_candidate]
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -476,9 +454,7 @@ class TestVertexAIAdapterToolCalling:
         assert "tools" not in call_args[1]
 
     @pytest.mark.asyncio
-    async def test_multiple_tool_calls(
-        self, vertex_adapter, sample_messages, sample_tool
-    ):
+    async def test_multiple_tool_calls(self, vertex_adapter, sample_messages, sample_tool):
         """Test handling multiple tool calls in one response."""
         # Create mock function calls
         mock_fc1 = Mock()
@@ -506,9 +482,7 @@ class TestVertexAIAdapterToolCalling:
         mock_response.text = ""
         mock_response.candidates = [mock_candidate]
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -544,9 +518,7 @@ class TestVertexAIAdapterToolCalling:
         mock_response.text = ""  # Empty content when tool is called
         mock_response.candidates = [mock_candidate]
 
-        vertex_adapter.client.generate_content_async = AsyncMock(
-            return_value=mock_response
-        )
+        vertex_adapter.client.generate_content_async = AsyncMock(return_value=mock_response)
 
         result = await vertex_adapter.complete_with_metadata(
             messages=sample_messages,

@@ -308,4 +308,3 @@ class TestDetectDuplicateInvoiceTool:
 
         assert result["success"] is False
         assert "tenant_id" in result["error"]
-

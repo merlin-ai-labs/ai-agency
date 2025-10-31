@@ -171,15 +171,17 @@ class WeatherAgentFlow(BaseFlow):
             # Build messages for LLM (add system prompt if first message)
             messages = []
             if not history:
-                messages.append({
-                    "role": "system",
-                    "content": (
-                        "You are a helpful weather assistant. "
-                        "You can check current weather for any location using the get_weather tool. "
-                        "Be friendly and conversational. "
-                        "Always include the temperature and conditions in your responses."
-                    ),
-                })
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a helpful weather assistant. "
+                            "You can check current weather for any location using the get_weather tool. "
+                            "Be friendly and conversational. "
+                            "Always include the temperature and conditions in your responses."
+                        ),
+                    }
+                )
 
             messages.extend(history)
             messages.append({"role": "user", "content": user_message})
@@ -247,28 +249,32 @@ class WeatherAgentFlow(BaseFlow):
                     )
 
                     # Add tool result to messages
-                    messages.append({
-                        "role": "assistant",
-                        "content": response.get("content") or "",
-                        "tool_calls": [
-                            {
-                                "id": tool_call["id"],
-                                "type": "function",
-                                "function": {
-                                    "name": tool_name,
-                                    "arguments": json.dumps(tool_args),
-                                },
-                            }
-                        ],
-                    })
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": response.get("content") or "",
+                            "tool_calls": [
+                                {
+                                    "id": tool_call["id"],
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": json.dumps(tool_args),
+                                    },
+                                }
+                            ],
+                        }
+                    )
 
                     # Add tool response message
                     tool_response_content = json.dumps(weather_result)
-                    messages.append({
-                        "role": "tool",
-                        "content": tool_response_content,
-                        "tool_call_id": tool_call["id"],
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "content": tool_response_content,
+                            "tool_call_id": tool_call["id"],
+                        }
+                    )
 
                     # Save tool result message
                     repo.save_message(

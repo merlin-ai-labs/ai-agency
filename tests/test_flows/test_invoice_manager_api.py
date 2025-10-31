@@ -17,6 +17,7 @@ def client():
 def mock_invoice_file():
     """Create a mock invoice file."""
     from io import BytesIO
+
     return ("test_invoice.pdf", BytesIO(b"fake pdf content"), "application/pdf")
 
 
@@ -250,4 +251,3 @@ class TestInvoiceManagerSearch:
 
         assert response.status_code == 500
         assert "Search failed" in response.json()["detail"]
-

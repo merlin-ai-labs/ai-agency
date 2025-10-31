@@ -64,9 +64,7 @@ class DocumentIngestion:
         - Add tenant_id to metadata for isolation
         - Return ingestion stats
         """
-        logger.info(
-            "ingestion.ingest_documents", doc_count=len(documents), tenant=tenant_id
-        )
+        logger.info("ingestion.ingest_documents", doc_count=len(documents), tenant=tenant_id)
 
         # Stub implementation
         result = {
@@ -109,6 +107,4 @@ class DocumentIngestion:
         - Delete chunks by document_id and tenant_id
         - Handle cascading deletes
         """
-        logger.info(
-            "ingestion.delete_documents", tenant=tenant_id, count=len(document_ids)
-        )
+        logger.info("ingestion.delete_documents", tenant=tenant_id, count=len(document_ids))

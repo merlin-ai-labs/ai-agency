@@ -170,4 +170,3 @@ class TestLangGraphLLMAdapterRepr:
         assert "LangGraphLLMAdapter" in repr_str
         assert "openai" in repr_str
         assert "gpt-4-turbo" in repr_str
-

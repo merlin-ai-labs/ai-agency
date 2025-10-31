@@ -11,7 +11,6 @@ TODO:
 - Store output artifacts to GCS
 """
 
-
 import structlog
 
 logger = structlog.get_logger()

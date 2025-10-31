@@ -81,9 +81,7 @@ class TestOpenAIAdapterComplete:
         mock_response.choices[0].message.content = "Python is a programming language."
         mock_response.usage.total_tokens = 50
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         # Call complete
         result = await openai_adapter.complete(
@@ -103,9 +101,7 @@ class TestOpenAIAdapterComplete:
         mock_response.choices[0].message.content = "Python is great."
         mock_response.usage.total_tokens = 30
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete(
             messages=sample_messages,
@@ -149,9 +145,7 @@ class TestOpenAIAdapterComplete:
         mock_response.choices[0].message.content = "Response"
         mock_response.usage.total_tokens = 50
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         # First call should succeed
         result1 = await openai_adapter.complete(
@@ -175,9 +169,7 @@ class TestOpenAIAdapterComplete:
         mock_response.choices[0].message.content = None  # Empty content
         mock_response.usage.total_tokens = 10
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete(
             messages=sample_messages,
@@ -201,9 +193,7 @@ class TestOpenAIAdapterCompleteWithMetadata:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 50
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -227,9 +217,7 @@ class TestOpenAIAdapterCompleteWithMetadata:
         mock_response.model = "gpt-4"
         mock_response.usage = None  # No usage data
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -356,9 +344,7 @@ class TestOpenAIAdapterToolCalling:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 50
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete(
             messages=sample_messages,
@@ -393,9 +379,7 @@ class TestOpenAIAdapterToolCalling:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 75
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -417,9 +401,7 @@ class TestOpenAIAdapterToolCalling:
         assert tool_call["function"]["arguments"] == '{"location": "Paris", "units": "celsius"}'
 
     @pytest.mark.asyncio
-    async def test_complete_without_tools_backward_compat(
-        self, openai_adapter, sample_messages
-    ):
+    async def test_complete_without_tools_backward_compat(self, openai_adapter, sample_messages):
         """Test that complete works without tools (backward compatibility)."""
         mock_response = Mock()
         mock_response.choices = [Mock()]
@@ -429,9 +411,7 @@ class TestOpenAIAdapterToolCalling:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 20
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete(
             messages=sample_messages,
@@ -445,9 +425,7 @@ class TestOpenAIAdapterToolCalling:
         assert "tools" not in call_kwargs
 
     @pytest.mark.asyncio
-    async def test_tool_choice_none(
-        self, openai_adapter, sample_messages, weather_tool_definition
-    ):
+    async def test_tool_choice_none(self, openai_adapter, sample_messages, weather_tool_definition):
         """Test complete with tool_choice='none' forces no tool use."""
         mock_response = Mock()
         mock_response.choices = [Mock()]
@@ -457,9 +435,7 @@ class TestOpenAIAdapterToolCalling:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 30
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete(
             messages=sample_messages,
@@ -493,9 +469,7 @@ class TestOpenAIAdapterToolCalling:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 40
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -541,9 +515,7 @@ class TestOpenAIAdapterToolCalling:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 100
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await openai_adapter.complete_with_metadata(
             messages=sample_messages,
@@ -577,9 +549,7 @@ class TestOpenAIAdapterToolCalling:
         mock_response.model = "gpt-4-turbo-2024-04-09"
         mock_response.usage.total_tokens = 60
 
-        openai_adapter.client.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        openai_adapter.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         # Test complete() method
         result_str = await openai_adapter.complete(

@@ -65,12 +65,14 @@ class TokenBucketRateLimiter:
         self.burst_size = int(tokens_per_minute * burst_multiplier)
 
         # In-memory buckets: {tenant_id: {minute_tokens, minute_reset, ...}}
-        self._buckets: Dict[str, Dict] = defaultdict(lambda: {
-            "minute_tokens": self.burst_size,
-            "minute_reset": datetime.now() + timedelta(minutes=1),
-            "hour_tokens": tokens_per_hour,
-            "hour_reset": datetime.now() + timedelta(hours=1),
-        })
+        self._buckets: Dict[str, Dict] = defaultdict(
+            lambda: {
+                "minute_tokens": self.burst_size,
+                "minute_reset": datetime.now() + timedelta(minutes=1),
+                "hour_tokens": tokens_per_hour,
+                "hour_reset": datetime.now() + timedelta(hours=1),
+            }
+        )
 
         logger.debug(
             "Rate limiter initialized",
@@ -78,7 +80,7 @@ class TokenBucketRateLimiter:
                 "tokens_per_minute": tokens_per_minute,
                 "tokens_per_hour": tokens_per_hour,
                 "burst_size": self.burst_size,
-            }
+            },
         )
 
     async def acquire(
@@ -111,7 +113,7 @@ class TokenBucketRateLimiter:
             bucket["minute_reset"] = now + timedelta(minutes=1)
             logger.debug(
                 f"Refilled minute bucket for {tenant_id}",
-                extra={"tenant_id": tenant_id, "tokens": self.burst_size}
+                extra={"tenant_id": tenant_id, "tokens": self.burst_size},
             )
 
         # Refill hour bucket if window expired
@@ -120,13 +122,14 @@ class TokenBucketRateLimiter:
             bucket["hour_reset"] = now + timedelta(hours=1)
             logger.debug(
                 f"Refilled hour bucket for {tenant_id}",
-                extra={"tenant_id": tenant_id, "tokens": self.tokens_per_hour}
+                extra={"tenant_id": tenant_id, "tokens": self.tokens_per_hour},
             )
 
         # Check if we have enough tokens in both buckets
-        if (bucket["minute_tokens"] >= estimated_tokens and
-            bucket["hour_tokens"] >= estimated_tokens):
-
+        if (
+            bucket["minute_tokens"] >= estimated_tokens
+            and bucket["hour_tokens"] >= estimated_tokens
+        ):
             # Consume tokens from both buckets
             bucket["minute_tokens"] -= estimated_tokens
             bucket["hour_tokens"] -= estimated_tokens
@@ -138,7 +141,7 @@ class TokenBucketRateLimiter:
                     "tokens": estimated_tokens,
                     "minute_remaining": bucket["minute_tokens"],
                     "hour_remaining": bucket["hour_tokens"],
-                }
+                },
             )
             return True, 0
 
@@ -147,7 +150,7 @@ class TokenBucketRateLimiter:
             (bucket["minute_reset"] - now).total_seconds(),
             (bucket["hour_reset"] - now).total_seconds()
             if bucket["hour_tokens"] < estimated_tokens
-            else 0
+            else 0,
         )
 
         logger.warning(
@@ -158,7 +161,7 @@ class TokenBucketRateLimiter:
                 "minute_available": bucket["minute_tokens"],
                 "hour_available": bucket["hour_tokens"],
                 "wait_seconds": wait_seconds,
-            }
+            },
         )
 
         return False, max(1, int(wait_seconds))
@@ -199,12 +202,12 @@ class TokenBucketRateLimiter:
                         "tenant_id": tenant_id,
                         "wait_seconds": wait_time,
                         "max_wait": max_wait,
-                    }
+                    },
                 )
 
             logger.info(
                 f"Waiting {wait_time}s for rate limit",
-                extra={"tenant_id": tenant_id, "wait_seconds": wait_time}
+                extra={"tenant_id": tenant_id, "wait_seconds": wait_time},
             )
             await asyncio.sleep(wait_time)
 
@@ -217,7 +220,7 @@ class TokenBucketRateLimiter:
                         "tenant_id": tenant_id,
                         "wait_seconds": wait_time,
                         "remaining_wait": remaining_wait,
-                    }
+                    },
                 )
 
     def get_status(self, tenant_id: str) -> Dict:

@@ -61,7 +61,9 @@ class InvoiceManagerState(TypedDict):
     """Search results for invoice queries."""
 
     # Flow control
-    next_action: Literal["capability_query", "process_invoice", "search_invoices", "upload", "end"] | None
+    next_action: (
+        Literal["capability_query", "process_invoice", "search_invoices", "upload", "end"] | None
+    )
     """Next action to take."""
 
     tenant_id: str
@@ -389,6 +391,7 @@ async def search_invoices_node(state: InvoiceManagerState) -> InvoiceManagerStat
 
 def create_agent_node(llm, tools):
     """Create agent node factory."""
+
     async def agent_node(state: InvoiceManagerState) -> InvoiceManagerState:
         """Agent node that processes messages with LLM."""
         from langchain_core.messages import HumanMessage
@@ -417,4 +420,3 @@ def create_agent_node(llm, tools):
         return state
 
     return agent_node
-

@@ -191,11 +191,13 @@ class LangGraphLLMAdapter(Runnable):
                 result.append({"role": "system", "content": msg.content})
             elif isinstance(msg, ToolMessage):
                 # Convert ToolMessage to tool role format
-                result.append({
-                    "role": "tool",
-                    "content": msg.content,
-                    "tool_call_id": getattr(msg, "tool_call_id", ""),
-                })
+                result.append(
+                    {
+                        "role": "tool",
+                        "content": msg.content,
+                        "tool_call_id": getattr(msg, "tool_call_id", ""),
+                    }
+                )
             else:
                 msg_type = type(msg).__name__
                 logger.warning(f"Unsupported message type: {msg_type}, converting to user message")
@@ -205,7 +207,6 @@ class LangGraphLLMAdapter(Runnable):
 
         return result
 
-
     def __repr__(self) -> str:
         """Return string representation for debugging."""
         return (
@@ -213,4 +214,3 @@ class LangGraphLLMAdapter(Runnable):
             f"adapter={self.adapter.provider_name!r}, "
             f"model={self.adapter.model_name!r})"
         )
-

@@ -43,11 +43,7 @@ class AIAgencyError(Exception):
 
     def __repr__(self) -> str:
         """Return detailed string representation for debugging."""
-        return (
-            f"{self.__class__.__name__}("
-            f"message={self.message!r}, "
-            f"details={self.details!r})"
-        )
+        return f"{self.__class__.__name__}(message={self.message!r}, details={self.details!r})"
 
 
 class DatabaseError(AIAgencyError):

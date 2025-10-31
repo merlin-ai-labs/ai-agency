@@ -76,7 +76,9 @@ class DetectDuplicateInvoiceTool(BaseTool):
 
         try:
             # Check for exact filename match
-            exact_match = await self._check_exact_filename(filename, sharepoint_folder_path, tenant_id)
+            exact_match = await self._check_exact_filename(
+                filename, sharepoint_folder_path, tenant_id
+            )
 
             # Check for similar content
             similar_matches = await self._check_similar_content(
@@ -103,7 +105,9 @@ class DetectDuplicateInvoiceTool(BaseTool):
                     "exact_match": exact_match["found"],
                     "exact_match_file": exact_match.get("file_path"),
                     "similar_matches": similar_matches,
-                    "confidence": 1.0 if exact_match["found"] else (similar_matches[0]["confidence"] if similar_matches else 0.0),
+                    "confidence": 1.0
+                    if exact_match["found"]
+                    else (similar_matches[0]["confidence"] if similar_matches else 0.0),
                 },
                 "error": None,
                 "metadata": {
@@ -120,7 +124,9 @@ class DetectDuplicateInvoiceTool(BaseTool):
                 "metadata": {},
             }
 
-    async def _check_exact_filename(self, filename: str, folder_path: str, tenant_id: str) -> dict[str, Any]:
+    async def _check_exact_filename(
+        self, filename: str, folder_path: str, tenant_id: str
+    ) -> dict[str, Any]:
         """Check for exact filename match in SharePoint."""
         # TODO: Implement SharePoint file search
         # For now, return placeholder
@@ -186,4 +192,3 @@ class DetectDuplicateInvoiceTool(BaseTool):
             return False
 
         return True
-

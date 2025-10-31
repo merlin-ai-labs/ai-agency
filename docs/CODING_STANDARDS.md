@@ -499,6 +499,29 @@ class OpenAIAdapter:
 
 ## 7. Database Patterns
 
+### Connection Pooling
+
+The application uses **psycopg ConnectionPool** for all database operations. This is handled automatically by `app/db/base.py` - you don't need to manage connections directly.
+
+```python
+# Good - use Session from get_session()
+from app.db.base import get_session
+from sqlmodel import Session
+
+with Session(get_session()) as session:
+    # Connection automatically obtained from pool
+    repo = ConversationRepository(session)
+    result = repo.create_conversation(tenant_id, flow_type)
+    # Connection automatically returned to pool
+```
+
+**Key points:**
+- Two separate pools: main application (20 connections) and LangGraph checkpointer (10 connections)
+- Connection pooling is automatic - just use `get_session()`
+- Never create connections directly with `psycopg.connect()`
+- Cloud SQL Proxy required for local development
+- See `docs/ARCHITECTURE.md` for detailed connection pool architecture
+
 ### Always use repositories
 
 ```python

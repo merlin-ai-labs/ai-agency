@@ -248,7 +248,9 @@ Respond ONLY with valid JSON, no explanation."""
                 "invoice_number": data.get("invoice_number", ""),
             }
         except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"Failed to parse LLM response as JSON: {response}", extra={"error": str(e)})
+            logger.warning(
+                f"Failed to parse LLM response as JSON: {response}", extra={"error": str(e)}
+            )
             # Fallback: try to extract basic info with regex
             return {
                 "date": "",
@@ -274,4 +276,3 @@ Respond ONLY with valid JSON, no explanation."""
             return False
 
         return True
-

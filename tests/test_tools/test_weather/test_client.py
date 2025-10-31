@@ -125,7 +125,9 @@ class TestWeatherClientGetCurrentWeather:
             assert result["visibility"] == 10000
             assert result["timestamp"] == 1640000000
 
-    @pytest.mark.skip(reason="Retry decorator makes mocking complex - error handling tested via integration tests")
+    @pytest.mark.skip(
+        reason="Retry decorator makes mocking complex - error handling tested via integration tests"
+    )
     @pytest.mark.asyncio
     async def test_get_weather_http_error(self, weather_client):
         """Test handling of HTTP errors."""
@@ -144,7 +146,9 @@ class TestWeatherClientGetCurrentWeather:
                 assert exc_info.value.details["location"] == "London"
                 assert exc_info.value.details["error_type"] == "HTTPError"
 
-    @pytest.mark.skip(reason="Retry decorator makes mocking complex - error handling tested via integration tests")
+    @pytest.mark.skip(
+        reason="Retry decorator makes mocking complex - error handling tested via integration tests"
+    )
     @pytest.mark.asyncio
     async def test_get_weather_404_not_found(self, weather_client):
         """Test handling of location not found (404)."""
@@ -167,7 +171,9 @@ class TestWeatherClientGetCurrentWeather:
                 assert exc_info.value.details["location"] == "InvalidCity"
                 assert exc_info.value.details["status_code"] == 404
 
-    @pytest.mark.skip(reason="Retry decorator makes mocking complex - error handling tested via integration tests")
+    @pytest.mark.skip(
+        reason="Retry decorator makes mocking complex - error handling tested via integration tests"
+    )
     @pytest.mark.asyncio
     async def test_get_weather_401_invalid_key(self, weather_client):
         """Test handling of invalid API key (401)."""
@@ -189,7 +195,9 @@ class TestWeatherClientGetCurrentWeather:
                 assert "Invalid API key" in str(exc_info.value)
                 assert exc_info.value.details["status_code"] == 401
 
-    @pytest.mark.skip(reason="Retry decorator makes mocking complex - error handling tested via integration tests")
+    @pytest.mark.skip(
+        reason="Retry decorator makes mocking complex - error handling tested via integration tests"
+    )
     @pytest.mark.asyncio
     async def test_get_weather_timeout(self, weather_client):
         """Test timeout handling."""
@@ -207,7 +215,9 @@ class TestWeatherClientGetCurrentWeather:
                 assert "Weather API call failed" in str(exc_info.value)
                 assert exc_info.value.details["error_type"] == "TimeoutException"
 
-    @pytest.mark.skip(reason="Retry decorator makes mocking complex - error handling tested via integration tests")
+    @pytest.mark.skip(
+        reason="Retry decorator makes mocking complex - error handling tested via integration tests"
+    )
     @pytest.mark.asyncio
     async def test_get_weather_invalid_response_format(self, weather_client):
         """Test handling of malformed API response."""
@@ -260,9 +270,13 @@ class TestWeatherClientGetCurrentWeather:
             call_args = mock_client.get.call_args
             assert call_args[1]["params"]["units"] == "standard"
 
-    @pytest.mark.skip(reason="Retry decorator makes mocking complex - error handling tested via integration tests")
+    @pytest.mark.skip(
+        reason="Retry decorator makes mocking complex - error handling tested via integration tests"
+    )
     @pytest.mark.asyncio
-    async def test_get_weather_retry_on_transient_error(self, weather_client, mock_weather_response):
+    async def test_get_weather_retry_on_transient_error(
+        self, weather_client, mock_weather_response
+    ):
         """Test retry logic on transient errors."""
         with patch("app.tools.weather.client.httpx.AsyncClient") as mock_client_class:
             with patch("asyncio.sleep", new_callable=AsyncMock):  # Mock sleep to avoid retry delays
@@ -294,7 +308,9 @@ class TestWeatherClientGetCurrentWeather:
                 assert call_count == 2  # Verify retry happened
 
     @pytest.mark.asyncio
-    async def test_get_weather_verify_request_parameters(self, weather_client, mock_weather_response):
+    async def test_get_weather_verify_request_parameters(
+        self, weather_client, mock_weather_response
+    ):
         """Test that request parameters are correctly passed."""
         with patch("app.tools.weather.client.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()

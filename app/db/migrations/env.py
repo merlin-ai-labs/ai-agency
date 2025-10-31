@@ -67,7 +67,9 @@ def run_migrations_online() -> None:
     if configuration:
         url = configuration.get("sqlalchemy.url", "")
         if url and url.startswith("postgresql://"):
-            configuration["sqlalchemy.url"] = url.replace("postgresql://", "postgresql+psycopg://", 1)
+            configuration["sqlalchemy.url"] = url.replace(
+                "postgresql://", "postgresql+psycopg://", 1
+            )
 
     connectable = engine_from_config(
         configuration,

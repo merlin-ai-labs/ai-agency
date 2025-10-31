@@ -81,9 +81,7 @@ class WeatherRepository:
 
         return call
 
-    def get_recent_calls(
-        self, tenant_id: str, limit: int = 10
-    ) -> Sequence[WeatherApiCall]:
+    def get_recent_calls(self, tenant_id: str, limit: int = 10) -> Sequence[WeatherApiCall]:
         """Get recent weather API calls for a tenant.
 
         Args:

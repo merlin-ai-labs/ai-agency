@@ -41,12 +41,12 @@ async def test_weather_agent():
     print(f"   ✓ Conversation ID: {result['conversation_id']}")
     print(f"   ✓ Tool used: {result['tool_used']}")
 
-    if result['tool_results']:
+    if result["tool_results"]:
         print(f"   ✓ Tool results: {result['tool_results']}")
 
     # Test multi-turn conversation
     print("\n3. Testing multi-turn conversation...")
-    conversation_id = result['conversation_id']
+    conversation_id = result["conversation_id"]
 
     print("   User: 'How about Paris?'")
     result2 = await agent.run(

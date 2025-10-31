@@ -166,9 +166,11 @@ class TestMistralAdapterComplete:
             mock_client = AsyncMock()
             mock_response = Mock()
             mock_response.status_code = 429
-            mock_response.raise_for_status = Mock(side_effect=httpx.HTTPStatusError(
-                "429 Rate Limit", request=Mock(), response=mock_response
-            ))
+            mock_response.raise_for_status = Mock(
+                side_effect=httpx.HTTPStatusError(
+                    "429 Rate Limit", request=Mock(), response=mock_response
+                )
+            )
 
             mock_client.post.return_value = mock_response
             mock_client.__aenter__.return_value = mock_client
@@ -527,9 +529,7 @@ class TestMistralAdapterToolCalling:
             assert tool_call["function"]["arguments"] == '{"location": "Paris", "units": "celsius"}'
 
     @pytest.mark.asyncio
-    async def test_complete_without_tools_backward_compat(
-        self, mistral_adapter, sample_messages
-    ):
+    async def test_complete_without_tools_backward_compat(self, mistral_adapter, sample_messages):
         """Test that complete works without tools (backward compatibility)."""
         mock_response_data = {
             "choices": [{"message": {"content": "Hello!"}, "finish_reason": "stop"}],

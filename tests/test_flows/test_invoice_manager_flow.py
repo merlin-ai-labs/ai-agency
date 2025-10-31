@@ -265,4 +265,3 @@ class TestSearchInvoicesNode:
         assert result["search_results"] is not None
         assert len(result["search_results"]) == 1
         assert result["error"] is None
-

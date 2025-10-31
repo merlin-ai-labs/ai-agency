@@ -333,9 +333,7 @@ class BaseAdapter(ABC):
     def __repr__(self) -> str:
         """Return string representation for debugging."""
         return (
-            f"{self.__class__.__name__}("
-            f"provider={self.provider_name!r}, "
-            f"model={self.model_name!r})"
+            f"{self.__class__.__name__}(provider={self.provider_name!r}, model={self.model_name!r})"
         )
 
 

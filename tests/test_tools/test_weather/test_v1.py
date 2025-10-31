@@ -82,7 +82,9 @@ class TestWeatherResultTypes:
             assert field in annotations, f"Missing field: {field}"
 
 
-@pytest.mark.skip(reason="Requires complex database and repository mocking - tested in integration tests")
+@pytest.mark.skip(
+    reason="Requires complex database and repository mocking - tested in integration tests"
+)
 class TestGetWeatherIntegration:
     """Integration tests for get_weather (skipped - requires full DB setup)."""
 

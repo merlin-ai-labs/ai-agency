@@ -139,9 +139,7 @@ class VertexAIAdapter(BaseAdapter):
         """
         return max(len(text) // 4, 10)
 
-    def _convert_tools_to_vertex_format(
-        self, tools: list[ToolDefinition]
-    ) -> list[Tool]:
+    def _convert_tools_to_vertex_format(self, tools: list[ToolDefinition]) -> list[Tool]:
         """Convert OpenAI tool definitions to Vertex AI format.
 
         OpenAI format:

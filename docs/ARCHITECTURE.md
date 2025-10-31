@@ -7,6 +7,7 @@ Technical architecture and design decisions for the AI Consulting Agency Platfor
 - [System Overview](#system-overview)
 - [Multi-Flow Conversation Architecture](#multi-flow-conversation-architecture)
 - [Infrastructure](#infrastructure)
+- [Database Connection Architecture](#database-connection-architecture)
 - [LLM Adapters](#llm-adapters)
 - [Technology Choices](#technology-choices)
 
@@ -338,6 +339,259 @@ uvicorn app.main:app --reload --port 8080
 - Every push to main triggers deployment
 - Zero-downtime deployment (gradual traffic shift)
 - Automatic rollback on health check failure
+
+---
+
+## Database Connection Architecture
+
+The platform uses a **unified psycopg ConnectionPool architecture** for all database operations, providing efficient connection management for both SQLAlchemy operations and LangGraph checkpointing.
+
+### Connection Pool Strategy
+
+**Design Principle:** Single connection pool type across the entire application.
+
+```
+┌─────────────────────────────────────────────────────┐
+│           Application Layer                         │
+│                                                     │
+│  ┌──────────────────┐      ┌─────────────────┐   │
+│  │  SQLAlchemy ORM  │      │   LangGraph     │   │
+│  │  (FastAPI Layer) │      │  Checkpointer   │   │
+│  └────────┬─────────┘      └────────┬────────┘   │
+│           │                          │             │
+│           │                          │             │
+│  ┌────────▼──────────────────────────▼────────┐   │
+│  │     psycopg ConnectionPool                 │   │
+│  │  (Unified Connection Management)           │   │
+│  │                                            │   │
+│  │  - Min size: 2 (main) / 1 (checkpointer) │   │
+│  │  - Max size: 20 (main) / 10 (checkpointer)│   │
+│  │  - Timeout: 30 seconds                    │   │
+│  └────────┬───────────────────────────────────┘   │
+│           │                                        │
+└───────────┼────────────────────────────────────────┘
+            │
+            ▼
+   ┌────────────────────┐
+   │   PostgreSQL       │
+   │  (Cloud SQL)       │
+   └────────────────────┘
+```
+
+### Two Connection Pool Instances
+
+The application creates **two separate psycopg ConnectionPool instances** optimized for different use cases:
+
+#### 1. Main Application Pool (`app/db/base.py`)
+
+Used by FastAPI endpoints and SQLAlchemy operations:
+
+```python
+from psycopg_pool import ConnectionPool
+
+pool = ConnectionPool(
+    conninfo=database_url,
+    min_size=2,      # Keep 2 connections warm
+    max_size=20,     # Support high concurrency
+    timeout=30,      # 30 second connection timeout
+)
+
+# SQLAlchemy uses this pool via creator pattern
+engine = create_engine(
+    "postgresql+psycopg://",
+    creator=lambda: pool.getconn(),  # Get connection from pool
+)
+```
+
+**Characteristics:**
+- Larger pool size (20) for handling concurrent API requests
+- Used by all repository operations (ConversationRepository, etc.)
+- Integrates with SQLAlchemy via the `creator` pattern
+- Single shared instance across the application
+
+#### 2. LangGraph Checkpointer Pool (`app/core/langgraph_checkpointer.py`)
+
+Used exclusively for LangGraph checkpoint operations:
+
+```python
+from psycopg_pool import ConnectionPool
+import psycopg
+
+pool = ConnectionPool(
+    conninfo=database_url,
+    min_size=1,      # Fewer baseline connections
+    max_size=10,     # Lower max for checkpoint ops
+    timeout=30,
+    kwargs={
+        "autocommit": True,              # Enable autocommit mode
+        "row_factory": psycopg.rows.dict_row,  # Return rows as dicts
+    },
+)
+
+# LangGraph PostgresSaver uses this pool directly
+checkpointer = PostgresSaver(conn=pool)
+```
+
+**Characteristics:**
+- Smaller pool size (10) optimized for checkpoint operations
+- Autocommit mode for LangGraph requirements
+- dict_row factory for PostgresSaver compatibility
+- Separate from main pool to avoid interference
+
+### Why Two Pools?
+
+**Benefits of separate pools:**
+
+1. **Isolation**: Checkpoint operations don't compete with API requests for connections
+2. **Optimization**: Each pool tuned for its specific workload
+3. **Monitoring**: Easier to track connection usage by purpose
+4. **Configuration**: Different autocommit/row_factory settings
+5. **Resilience**: Issues in one pool don't affect the other
+
+**Trade-offs:**
+- Slightly higher total connection count
+- More complex initialization
+- Worth it: Better performance and isolation
+
+### Connection String Handling
+
+Both pools use the same connection string from `DATABASE_URL` with driver suffix stripped:
+
+```python
+# From environment
+DATABASE_URL=postgresql+psycopg://user:pass@host:port/dbname
+
+# Strip SQLAlchemy driver suffix for psycopg
+db_url = settings.database_url.replace("+psycopg", "").replace("+asyncpg", "")
+# Result: postgresql://user:pass@host:port/dbname
+
+# psycopg handles both formats:
+# - Local: postgresql://user:pass@localhost:5433/dbname
+# - Cloud SQL Unix socket: postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
+```
+
+### Local Development with Cloud SQL Proxy
+
+**Cloud SQL Proxy is REQUIRED** for local development:
+
+```bash
+# Terminal 1: Start Cloud SQL Proxy
+cloud-sql-proxy merlin-notebook-lm:europe-west1:ai-agency-db --port 5433
+
+# Terminal 2: Application connects via proxy
+DATABASE_URL=postgresql+psycopg://postgres:PASSWORD@localhost:5433/ai_agency
+```
+
+**Why Cloud SQL Proxy?**
+- Ensures dev database matches production exactly
+- No Docker PostgreSQL needed
+- Automatic SSL encryption
+- Works with both connection pools
+- Same connection patterns as production
+
+### Production (Cloud Run)
+
+In production, Cloud Run connects directly via Unix sockets:
+
+```python
+# Cloud Run environment
+DATABASE_URL=postgresql+psycopg://user:pass@/dbname?host=/cloudsql/project:region:instance
+
+# psycopg ConnectionPool handles Unix socket automatically
+# No changes needed to pool configuration
+```
+
+**Benefits:**
+- Lower latency (no TCP overhead)
+- Higher security (no network exposure)
+- Better performance (direct Unix socket)
+- Same code works in dev and prod
+
+### SQLAlchemy Integration Pattern
+
+Main application pool integrates with SQLAlchemy via the `creator` pattern:
+
+```python
+def get_engine() -> Engine:
+    """Create SQLAlchemy engine using psycopg ConnectionPool."""
+    pool = get_connection_pool()
+
+    if pool is not None:
+        # PostgreSQL: Use psycopg pool with creator pattern
+        def getconn():
+            return pool.getconn()
+
+        engine = create_engine(
+            "postgresql+psycopg://",  # Specify psycopg3 dialect
+            creator=getconn,           # Get connections from pool
+            echo=settings.environment == "development",
+        )
+    else:
+        # SQLite: Standard engine for testing
+        engine = create_engine(
+            settings.database_url,
+            echo=settings.environment == "development",
+        )
+
+    return engine
+```
+
+**Key points:**
+- SQLAlchemy doesn't manage connections directly
+- `creator` function provides connections from psycopg pool
+- Single pool shared across all Sessions
+- SQLAlchemy's session management on top of psycopg pooling
+
+### Testing with SQLite
+
+For testing, the application falls back to SQLite (no connection pooling):
+
+```python
+# Test environment
+DATABASE_URL=sqlite:///./test.db
+
+# get_connection_pool() returns None for SQLite
+# SQLAlchemy creates standard engine without pooling
+```
+
+**Benefits:**
+- Fast in-memory tests
+- No Cloud SQL dependency for CI/CD
+- Same application code works with both databases
+
+### Connection Pool Monitoring
+
+**What to monitor:**
+
+```python
+# Pool status (future enhancement)
+pool.size       # Current pool size
+pool.idle       # Idle connections
+pool.used       # Active connections
+pool.max_size   # Maximum pool size
+```
+
+**Alerts:**
+- Pool exhaustion (all connections in use)
+- High connection wait times
+- Connection timeout errors
+
+### Migration Path
+
+**Previous architecture (pre-Wave 2.5):**
+- Mixed asyncpg and psycopg usage
+- No connection pooling for LangGraph
+- Less efficient connection management
+
+**Current architecture (Wave 2.5+):**
+- Unified psycopg ConnectionPool throughout
+- Separate pools for main app and checkpointer
+- Better performance and isolation
+
+**Future enhancements (Wave 4+):**
+- Connection pool metrics dashboard
+- Automatic pool size tuning
+- Connection leak detection
 
 ---
 
@@ -944,6 +1198,7 @@ The AI Consulting Agency Platform is built on:
 
 **Key architectural decisions:**
 - PostgreSQL for conversation storage (ACID + performance)
+- Unified psycopg ConnectionPool architecture (separate pools for SQLAlchemy and LangGraph)
 - Composite indexes for efficient multi-tenant queries
 - Adapter pattern for LLM flexibility
 - Cloud Run for serverless deployment

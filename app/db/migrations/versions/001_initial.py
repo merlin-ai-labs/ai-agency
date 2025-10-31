@@ -5,6 +5,7 @@ Revises:
 Create Date: 2025-10-27 22:00:00.000000
 
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -26,11 +27,13 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("tenant_id", sa.String(), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
-        sa.Column("settings", postgresql.JSON(astext_type=sa.Text()), nullable=False, server_default="{}"),
+        sa.Column(
+            "settings", postgresql.JSON(astext_type=sa.Text()), nullable=False, server_default="{}"
+        ),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("tenant_id")
+        sa.UniqueConstraint("tenant_id"),
     )
     op.create_index(op.f("ix_tenants_tenant_id"), "tenants", ["tenant_id"], unique=True)
 
@@ -42,15 +45,25 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(), nullable=False),
         sa.Column("flow_name", sa.String(), nullable=False),
         sa.Column("status", sa.String(), nullable=False, server_default="queued"),
-        sa.Column("input_data", postgresql.JSON(astext_type=sa.Text()), nullable=False, server_default="{}"),
+        sa.Column(
+            "input_data",
+            postgresql.JSON(astext_type=sa.Text()),
+            nullable=False,
+            server_default="{}",
+        ),
         sa.Column("output_data", postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column("error_message", sa.String(), nullable=True),
-        sa.Column("artifact_urls", postgresql.JSON(astext_type=sa.Text()), nullable=False, server_default="[]"),
+        sa.Column(
+            "artifact_urls",
+            postgresql.JSON(astext_type=sa.Text()),
+            nullable=False,
+            server_default="[]",
+        ),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.Column("started_at", sa.DateTime(), nullable=True),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("run_id")
+        sa.UniqueConstraint("run_id"),
     )
     op.create_index(op.f("ix_runs_run_id"), "runs", ["run_id"], unique=True)
     op.create_index(op.f("ix_runs_tenant_id"), "runs", ["tenant_id"], unique=False)
@@ -70,12 +83,21 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(), nullable=False),
         sa.Column("document_id", sa.String(), nullable=False),
         sa.Column("content", sa.String(), nullable=False),
-        sa.Column("chunk_metadata", postgresql.JSON(astext_type=sa.Text()), nullable=False, server_default="{}"),
+        sa.Column(
+            "chunk_metadata",
+            postgresql.JSON(astext_type=sa.Text()),
+            nullable=False,
+            server_default="{}",
+        ),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
-        sa.PrimaryKeyConstraint("id")
+        sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_document_chunks_tenant_id"), "document_chunks", ["tenant_id"], unique=False)
-    op.create_index(op.f("ix_document_chunks_document_id"), "document_chunks", ["document_id"], unique=False)
+    op.create_index(
+        op.f("ix_document_chunks_tenant_id"), "document_chunks", ["tenant_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_document_chunks_document_id"), "document_chunks", ["document_id"], unique=False
+    )
 
     # Add vector column for embeddings (1536 dimensions for OpenAI)
     # Using raw SQL because SQLAlchemy doesn't have native pgvector type support
@@ -86,7 +108,9 @@ def upgrade() -> None:
     # op.execute('CREATE INDEX ix_document_chunks_embedding ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)')
 
     # For now, create a basic index that works with empty table
-    op.execute("CREATE INDEX ix_document_chunks_embedding ON document_chunks USING ivfflat (embedding vector_cosine_ops)")
+    op.execute(
+        "CREATE INDEX ix_document_chunks_embedding ON document_chunks USING ivfflat (embedding vector_cosine_ops)"
+    )
 
 
 def downgrade() -> None:
