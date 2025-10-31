@@ -3,15 +3,19 @@
 This module provides a checkpointer configuration for LangGraph that integrates
 with our existing PostgreSQL database and adds tenant isolation to ensure
 multi-tenancy security.
+
+Uses Google's langchain-google-cloud-sql-pg for proper Cloud SQL integration.
 """
 
 import asyncio
 import logging
+import os
+import re
 from typing import Any
 
 from langgraph.checkpoint.base import CheckpointTuple, RunnableConfig
 from langgraph.checkpoint.postgres import PostgresSaver
-from psycopg_pool import ConnectionPool
+from langchain_google_cloud_sql_pg import PostgresEngine
 
 from app.config import settings
 
@@ -25,9 +29,11 @@ class TenantAwarePostgresSaver(PostgresSaver):
     checkpoint operations. This ensures that checkpoints are scoped to
     tenants and prevents cross-tenant access.
 
+    Uses Google's PostgresEngine for proper Cloud SQL integration.
+
     Attributes:
         default_tenant_id: Default tenant ID to use when not specified.
-        _pool: Shared connection pool for all checkpointer instances.
+        _engine: Shared PostgresEngine for all checkpointer instances.
 
     Example:
         >>> checkpointer = get_langgraph_checkpointer(tenant_id="tenant_123")
@@ -35,8 +41,8 @@ class TenantAwarePostgresSaver(PostgresSaver):
         >>> app = graph.compile(checkpointer=checkpointer)
     """
 
-    # Class-level connection pool shared across instances
-    _pool: ConnectionPool | None = None
+    # Class-level engine shared across instances
+    _engine: PostgresEngine | None = None
 
     def __init__(
         self,
@@ -49,29 +55,13 @@ class TenantAwarePostgresSaver(PostgresSaver):
             tenant_id: Tenant ID for isolating checkpoints.
             **kwargs: Additional arguments passed to PostgresSaver.
         """
-        # Get database URL
-        db_url = settings.database_url
+        # Create shared engine if it doesn't exist
+        if TenantAwarePostgresSaver._engine is None:
+            TenantAwarePostgresSaver._engine = self._create_engine()
 
-        # Convert to standard PostgreSQL URL (remove SQLAlchemy driver prefixes)
-        # ConnectionPool expects standard PostgreSQL URLs, not SQLAlchemy-style URLs
-        if "+asyncpg" in db_url:
-            db_url = db_url.replace("+asyncpg", "")
-        if "+psycopg" in db_url:
-            db_url = db_url.replace("+psycopg", "")
-
-        # Create shared connection pool if it doesn't exist
-        if TenantAwarePostgresSaver._pool is None:
-            logger.info("Creating PostgreSQL connection pool for checkpointer")
-            TenantAwarePostgresSaver._pool = ConnectionPool(
-                conninfo=db_url,
-                min_size=1,
-                max_size=10,
-                timeout=30,
-            )
-
-        # Initialize parent with connection pool
+        # Initialize parent with engine's connection pool
         super().__init__(
-            conn=TenantAwarePostgresSaver._pool,
+            conn=TenantAwarePostgresSaver._engine._pool,
             **kwargs,
         )
 
@@ -81,9 +71,87 @@ class TenantAwarePostgresSaver(PostgresSaver):
             "Initialized TenantAwarePostgresSaver",
             extra={
                 "tenant_id": tenant_id,
-                "database_url": settings.database_url.split("@")[-1] if "@" in settings.database_url else "local",
             },
         )
+
+    def _create_engine(self) -> PostgresEngine:
+        """Create PostgresEngine for Cloud SQL connections.
+
+        Handles both Cloud SQL (Unix socket) and local development (proxy).
+
+        Returns:
+            PostgresEngine instance configured for the environment.
+        """
+        db_url = settings.database_url
+
+        # Check if this is a Cloud SQL Unix socket connection
+        # Format: postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
+        if "host=/cloudsql/" in db_url:
+            # Extract connection details from Cloud SQL URL
+            match = re.search(r"host=/cloudsql/([^:]+):([^:]+):([^&\s]+)", db_url)
+            if match:
+                project_id = match.group(1)
+                region = match.group(2)
+                instance_name = match.group(3)
+
+                # Extract database name
+                db_match = re.search(r"@/([^?]+)", db_url)
+                database = db_match.group(1) if db_match else "ai_agency"
+
+                logger.info(
+                    f"Creating Cloud SQL PostgresEngine: {project_id}:{region}:{instance_name}"
+                )
+
+                # Use PostgresEngine for Cloud SQL
+                engine = PostgresEngine.from_instance(
+                    project_id=project_id,
+                    region=region,
+                    instance=instance_name,
+                    database=database,
+                )
+
+                return engine
+
+        # For local development with cloud-sql-proxy or direct PostgreSQL
+        # Parse standard PostgreSQL URL
+        logger.info("Creating PostgresEngine for local/proxy connection")
+
+        # Extract connection details
+        db_match = re.match(
+            r"postgresql(?:\+[^:]+)?://([^:]+):([^@]+)@([^:/]+):(\d+)/(.+)",
+            db_url,
+        )
+
+        if db_match:
+            user = db_match.group(1)
+            password = db_match.group(2)
+            host = db_match.group(3)
+            port = int(db_match.group(4))
+            database = db_match.group(5)
+
+            # For cloud-sql-proxy, we need to use the instance connection approach
+            # but with custom host/port
+            if host == "localhost" and port == 5433:
+                # This is likely cloud-sql-proxy for local development
+                # Use the GCP project from settings
+                project_id = settings.gcp_project_id or "merlin-notebook-lm"
+
+                # Create engine with custom configuration
+                engine = PostgresEngine.from_instance(
+                    project_id=project_id,
+                    region="europe-west1",
+                    instance="ai-agency-db",
+                    database=database,
+                    # For local proxy, configure to use localhost
+                    ip_type="PRIVATE",  # This will use the proxy
+                )
+
+                return engine
+
+        # Fallback: create engine from URL (not ideal but works)
+        logger.warning("Using fallback PostgresEngine creation from URL")
+        engine = PostgresEngine.from_url(db_url)
+        return engine
 
     # Async method implementations
     # PostgresSaver v3.0.0 has async method stubs that raise NotImplementedError
