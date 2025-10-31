@@ -4,18 +4,17 @@ This module provides a checkpointer configuration for LangGraph that integrates
 with our existing PostgreSQL database and adds tenant isolation to ensure
 multi-tenancy security.
 
-Uses Google's langchain-google-cloud-sql-pg for proper Cloud SQL integration.
+Uses psycopg ConnectionPool with proper Unix socket configuration for Cloud SQL.
 """
 
 import asyncio
 import logging
-import os
-import re
 from typing import Any
 
 from langgraph.checkpoint.base import CheckpointTuple, RunnableConfig
 from langgraph.checkpoint.postgres import PostgresSaver
-from langchain_google_cloud_sql_pg import PostgresEngine
+from psycopg_pool import ConnectionPool
+import psycopg
 
 from app.config import settings
 
@@ -41,8 +40,8 @@ class TenantAwarePostgresSaver(PostgresSaver):
         >>> app = graph.compile(checkpointer=checkpointer)
     """
 
-    # Class-level engine shared across instances
-    _engine: PostgresEngine | None = None
+    # Class-level connection pool shared across instances
+    _pool: ConnectionPool | None = None
 
     def __init__(
         self,
@@ -55,13 +54,13 @@ class TenantAwarePostgresSaver(PostgresSaver):
             tenant_id: Tenant ID for isolating checkpoints.
             **kwargs: Additional arguments passed to PostgresSaver.
         """
-        # Create shared engine if it doesn't exist
-        if TenantAwarePostgresSaver._engine is None:
-            TenantAwarePostgresSaver._engine = self._create_engine()
+        # Create shared connection pool if it doesn't exist
+        if TenantAwarePostgresSaver._pool is None:
+            TenantAwarePostgresSaver._pool = self._create_connection_pool()
 
-        # Initialize parent with engine's connection pool
+        # Initialize parent with connection pool
         super().__init__(
-            conn=TenantAwarePostgresSaver._engine._pool,
+            conn=TenantAwarePostgresSaver._pool,
             **kwargs,
         )
 
@@ -74,84 +73,44 @@ class TenantAwarePostgresSaver(PostgresSaver):
             },
         )
 
-    def _create_engine(self) -> PostgresEngine:
-        """Create PostgresEngine for Cloud SQL connections.
+    def _create_connection_pool(self) -> ConnectionPool:
+        """Create psycopg ConnectionPool for Cloud SQL.
 
         Handles both Cloud SQL (Unix socket) and local development (proxy).
 
         Returns:
-            PostgresEngine instance configured for the environment.
+            ConnectionPool instance configured for the environment.
         """
         db_url = settings.database_url
 
-        # Check if this is a Cloud SQL Unix socket connection
-        # Format: postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
-        if "host=/cloudsql/" in db_url:
-            # Extract connection details from Cloud SQL URL
-            match = re.search(r"host=/cloudsql/([^:]+):([^:]+):([^&\s]+)", db_url)
-            if match:
-                project_id = match.group(1)
-                region = match.group(2)
-                instance_name = match.group(3)
+        # Parse DATABASE_URL to build psycopg-compatible connection string
+        # Remove driver suffix if present
+        db_url = db_url.replace("+psycopg", "").replace("+asyncpg", "")
 
-                # Extract database name
-                db_match = re.search(r"@/([^?]+)", db_url)
-                database = db_match.group(1) if db_match else "ai_agency"
+        # psycopg can handle the connection string directly
+        # It properly parses Unix socket paths in the format:
+        # postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
 
-                logger.info(
-                    f"Creating Cloud SQL PostgresEngine: {project_id}:{region}:{instance_name}"
-                )
+        logger.info(f"Creating psycopg ConnectionPool for checkpointer")
 
-                # Use PostgresEngine for Cloud SQL
-                engine = PostgresEngine.from_instance(
-                    project_id=project_id,
-                    region=region,
-                    instance=instance_name,
-                    database=database,
-                )
-
-                return engine
-
-        # For local development with cloud-sql-proxy or direct PostgreSQL
-        # Parse standard PostgreSQL URL
-        logger.info("Creating PostgresEngine for local/proxy connection")
-
-        # Extract connection details
-        db_match = re.match(
-            r"postgresql(?:\+[^:]+)?://([^:]+):([^@]+)@([^:/]+):(\d+)/(.+)",
-            db_url,
-        )
-
-        if db_match:
-            user = db_match.group(1)
-            password = db_match.group(2)
-            host = db_match.group(3)
-            port = int(db_match.group(4))
-            database = db_match.group(5)
-
-            # For cloud-sql-proxy, we need to use the instance connection approach
-            # but with custom host/port
-            if host == "localhost" and port == 5433:
-                # This is likely cloud-sql-proxy for local development
-                # Use the GCP project from settings
-                project_id = settings.gcp_project_id or "merlin-notebook-lm"
-
-                # Create engine with custom configuration
-                engine = PostgresEngine.from_instance(
-                    project_id=project_id,
-                    region="europe-west1",
-                    instance="ai-agency-db",
-                    database=database,
-                    # For local proxy, configure to use localhost
-                    ip_type="PRIVATE",  # This will use the proxy
-                )
-
-                return engine
-
-        # Fallback: create engine from URL (not ideal but works)
-        logger.warning("Using fallback PostgresEngine creation from URL")
-        engine = PostgresEngine.from_url(db_url)
-        return engine
+        try:
+            pool = ConnectionPool(
+                conninfo=db_url,
+                min_size=1,
+                max_size=10,
+                timeout=30,
+                kwargs={
+                    # Enable autocommit for checkpoint operations
+                    "autocommit": True,
+                    # Use dict_row for PostgresSaver compatibility
+                    "row_factory": psycopg.rows.dict_row,
+                },
+            )
+            logger.info("Successfully created psycopg ConnectionPool")
+            return pool
+        except Exception as e:
+            logger.error(f"Failed to create ConnectionPool: {e}")
+            raise
 
     # Async method implementations
     # PostgresSaver v3.0.0 has async method stubs that raise NotImplementedError
